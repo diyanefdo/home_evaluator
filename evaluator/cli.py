@@ -76,6 +76,22 @@ def build_engine_params(args: argparse.Namespace) -> dict:
         "account_strategy": str(args.account_strategy),
         "retirement_marginal_rate": _override(args.retirement_rate, tax.RETIREMENT_MARGINAL_RATE),
     }
+
+    # ---- Transaction costs (purchase land-transfer tax; sale commission) ----
+    include_tx = not bool(getattr(args, "no_transaction_costs", False))
+    ltt_region = region.get("ltt_region", "ontario")
+    first_time = bool(getattr(args, "first_time_buyer", False))
+    purchase_legal = _override(getattr(args, "purchase_legal", None), tax.PURCHASE_LEGAL_FEE)
+    params["include_transaction_costs"] = include_tx
+    params["ltt_region"] = ltt_region
+    params["first_time_buyer"] = first_time
+    params["purchase_closing_costs"] = (
+        tax.purchase_closing_costs(price, ltt_region, first_time, purchase_legal)
+        if include_tx else 0.0
+    )
+    params["commission_rate"] = _override(getattr(args, "commission_rate", None), tax.REALTOR_COMMISSION_RATE)
+    params["hst_rate"] = tax.HST_RATE
+    params["sale_legal_fee"] = tax.SALE_LEGAL_FEE
     return params
 
 
@@ -120,6 +136,20 @@ def print_report(params: dict, summary: dict, chart_paths: list[str]) -> None:
     print(f"    TFSA room (now)   : {_money(tax.tfsa_cumulative_room(int(params.get('current_age', 35))), sym)}"
           f"  ;  RRSP room/yr {_money(tax.rrsp_annual_room(params.get('annual_income', 0)), sym)}")
     print("    Home: principal residence -> capital-gains-tax-FREE on sale")
+    if params.get("include_transaction_costs", True):
+        pc = summary.get("purchase_closing_costs", params.get("purchase_closing_costs", 0))
+        sc = summary.get("selling_costs_final", 0)
+        ft = "  (first-time-buyer rebate applied)" if params.get("first_time_buyer") else ""
+        print()
+        print("  TRANSACTION COSTS:")
+        print(f"    At purchase       : {_money(pc, sym)} land-transfer tax + legal "
+              f"({params.get('ltt_region', 'ontario')}){ft}")
+        print(f"    At sale (yr {T})    : {_money(sc, sym)} "
+              f"(~{params.get('commission_rate', 0.05) * 100:.0f}% commission + HST + legal)")
+        print("    (Purchase cost is credited to the renter's invested lump.)")
+    else:
+        print()
+        print("  TRANSACTION COSTS: disabled")
     print(line)
 
     cy = summary.get("crossover_year")
@@ -187,6 +217,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    help="shelter-first: fill TFSA->RRSP then taxable; taxable-only: no sheltering")
     t.add_argument("--retirement-rate", type=float,
                    help="Marginal rate on RRSP withdrawals + realized gains at term end (decimal, default 0.30)")
+
+    # Transaction costs: land-transfer tax at purchase, realtor/legal at sale.
+    x = p.add_argument_group("transaction costs (purchase + sale)")
+    x.add_argument("--first-time-buyer", action="store_true",
+                   help="Apply first-time-buyer land-transfer-tax rebates")
+    x.add_argument("--commission-rate", type=float,
+                   help="Realtor commission at sale (decimal, default 0.05)")
+    x.add_argument("--purchase-legal", type=float,
+                   help="Legal + inspection fees at purchase (default 2500)")
+    x.add_argument("--no-transaction-costs", action="store_true",
+                   help="Disable purchase/sale transaction costs (compare without them)")
 
     # Optional assumption overrides (default to regional scraper data).
     o = p.add_argument_group("assumption overrides (default: regional)")

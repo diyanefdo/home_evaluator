@@ -24,17 +24,33 @@ Chart 5. Specifically:
   taxed at a lower **retirement** marginal rate (default 30%).
 - Chart 5 and the headline net-worth gap are now **after-tax**.
 
-**New result (baseline, age 35 / $120k income / shelter-first):** renter still
-ahead ~$1.60M after tax — the RRSP refund arbitrage (contribute at ~43%, withdraw
-at 30%) plus tax-free TFSA growth outweigh the capital-gains drag at these
-assumptions. Under *taxable-only* the renter's lead shrinks to ~$0.74M. The
-result remains highly sensitive to appreciation (gap #6) and income/strategy.
-
 **Tax-layer simplifications worth revisiting:** single province (Ontario);
 brackets/limits ~2024-2026, not indexed forward; assumes TFSA room is fully
 unused at the start and RRSP has *no carried-forward* room (annual only); cap
 gains realized as a lump at term end at the retirement rate; one flat retirement
-rate. Gaps #3–#7 below are still open.
+rate.
+
+## ✅ UPDATE 2026-06-26 — Transaction costs implemented (gaps #3 & #4 addressed)
+
+Purchase + sale transaction costs now ship in `evaluator/tax.py` and flow
+through the model (toggle with `--no-transaction-costs`):
+
+- **Purchase (gap #4):** land-transfer tax — Ontario provincial + Toronto
+  municipal for Toronto FSAs (≈$33k on a $1M home), Ontario LTT as a national
+  proxy elsewhere — plus ~$2,500 legal/inspection. Optional **first-time-buyer**
+  rebates. The buyer's closing costs are sunk, so that same cash is credited to
+  the renter's invested year-0 lump (keeps cash flows matched).
+- **Sale (gap #3):** ~5% realtor commission + 13% HST on it + legal, netted off
+  the owner's equity in the after-tax net-worth comparison (Chart 1's gross
+  equity is untouched).
+
+**New result (baseline, age 35 / $120k income / shelter-first, with tax +
+transaction costs):** renter ahead ~**$2.38M** after tax (vs ~$1.60M with tax
+only) — transaction costs push toward renting, as expected. The result is still
+dominated by the appreciation assumption (gap #6).
+
+Remaining open items: gaps **#5 (terminal value / imputed rent)**, **#6
+(sensitivity grid)**, and **#7 (minor polish)**.
 
 ---
 
@@ -141,9 +157,9 @@ would likely land near parity at 5% appreciation and favor buying at ~7%.**
 1. ~~**Tax layer (highest value).** Capital-gains tax on the renter's taxable
    portfolio, with optional TFSA/RRSP sheltering; principal-residence exemption
    for the owner.~~ **DONE 2026-06-26** — see the update note at the top.
-2. **Transaction costs.** Land-transfer tax (Ontario + Toronto) at purchase;
-   realtor commission + HST at sale. Wire up the existing unused `closing_costs`
-   param.
+2. ~~**Transaction costs.** Land-transfer tax (Ontario + Toronto) at purchase;
+   realtor commission + HST at sale.~~ **DONE 2026-06-26** — see the second
+   update note at the top.
 3. **Sensitivity output.** An appreciation × return grid so the result's
    fragility is obvious at a glance.
 4. **Terminal-value handling.** Extend a few years past payoff, or annotate the

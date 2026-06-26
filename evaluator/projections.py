@@ -308,8 +308,23 @@ def build_projection(params: dict) -> dict:
     renter_contrib_monthly = np.maximum(0.0, monthly_ownership_cost - monthly_rent)
     owner_contrib_monthly = np.maximum(0.0, monthly_rent - monthly_ownership_cost)
 
-    renter_acct = _run_accounts(down, renter_contrib_monthly)
+    # ---- Transaction costs: purchase land-transfer tax + sale commission ----
+    # Buying costs the buyer one-time closing costs (land-transfer tax + legal),
+    # which are sunk. In the rent scenario that same cash is free to invest, so
+    # it's added to the renter's year-0 lump (keeps the cash flows matched).
+    include_tx = bool(params.get("include_transaction_costs", True))
+    purchase_costs = float(params.get("purchase_closing_costs", 0.0)) if include_tx else 0.0
+    commission_rate = float(params.get("commission_rate", 0.0)) if include_tx else 0.0
+    hst_rate = float(params.get("hst_rate", 0.0))
+    sale_legal = float(params.get("sale_legal_fee", 0.0)) if include_tx else 0.0
+
+    renter_acct = _run_accounts(down + purchase_costs, renter_contrib_monthly)
     owner_acct = _run_accounts(0.0, owner_contrib_monthly)
+
+    # Selling costs the owner would pay to realize their equity each year
+    # (realtor commission + HST on it + legal). Netted off equity in the
+    # after-tax net-worth comparison only (Chart 1's gross equity is untouched).
+    selling_costs = home_value * commission_rate * (1 + hst_rate) + sale_legal
 
     renter_portfolio = renter_acct["portfolio"]          # pre-tax (charts 3/5)
     owner_adv_portfolio = owner_acct["portfolio"]         # pre-tax (charts 4/5)
@@ -331,7 +346,9 @@ def build_projection(params: dict) -> dict:
     owner_inv_after_tax = _after_tax_series(
         owner_acct, retirement_rate=retirement_rate, cg_inclusion=cg_inclusion
     )
-    buyer_net_worth_after_tax = equity + owner_inv_after_tax
+    # Buyer net worth = home equity NET of selling costs (home gain itself is
+    # principal-residence tax-free) + after-tax side investments.
+    buyer_net_worth_after_tax = (equity - selling_costs) + owner_inv_after_tax
     renter_net_worth_after_tax = renter_after_tax
 
     crossover_month = _detect_crossover(monthly_rent, monthly_ownership_cost)
@@ -358,6 +375,10 @@ def build_projection(params: dict) -> dict:
         "renter_net_worth_after_tax": renter_net_worth_after_tax,
         "renter_accounts": renter_acct,
         "owner_accounts": owner_acct,
+        "owner_inv_after_tax": owner_inv_after_tax,
+        "renter_inv_after_tax": renter_after_tax,
+        "selling_costs": selling_costs,
+        "purchase_closing_costs": purchase_costs,
         "tax_meta": {
             "marginal_rate": marg_rate,
             "retirement_rate": retirement_rate,
@@ -426,23 +447,37 @@ def compute_summary(projection: dict, params: dict) -> dict:
         )
     crossover_year = None if crossover_month is None else crossover_month / 12.0
 
+    purchase_costs = float(projection.get("purchase_closing_costs", 0.0))
+    selling_costs_arr = projection.get("selling_costs")
+    selling_costs_final = (
+        float(np.asarray(selling_costs_arr)[T]) if selling_costs_arr is not None else 0.0
+    )
+
     total_cost_of_ownership = (
         down_payment
+        + purchase_costs
         + float(cum_principal[T])
         + float(cum_interest[T])
         + float(cum_property_tax[T])
         + float(cum_insurance_hoa[T])
+        + selling_costs_final
     )
     total_rent_paid = float(np.sum(monthly_rent))
     total_interest_paid = float(cum_interest[T])
 
     final_buyer_minus_renter = _buyer_nw(T) - _renter_nw(T)
 
-    # Tax drag at term end: pre-tax value minus after-tax value, per scenario.
+    # Investment tax drag at term end (NOT transaction costs): pre-tax portfolio
+    # minus after-tax portfolio. The renter has only investments; the buyer's is
+    # the tax on side investments (home gain is exempt, so it's usually ~0).
+    renter_inv_at = projection.get("renter_inv_after_tax")
+    owner_inv_at = projection.get("owner_inv_after_tax")
+    renter_inv_at_T = float(np.asarray(renter_inv_at)[T]) if renter_inv_at is not None else _renter_nw(T)
+    owner_inv_at_T = float(np.asarray(owner_inv_at)[T]) if owner_inv_at is not None else 0.0
     renter_pretax_T = float(renter[T])
     buyer_pretax_T = float(equity[T] + owner_adv[T])
-    renter_tax_paid = renter_pretax_T - _renter_nw(T)
-    buyer_tax_paid = buyer_pretax_T - _buyer_nw(T)
+    renter_tax_paid = renter_pretax_T - renter_inv_at_T
+    buyer_tax_paid = float(owner_adv[T]) - owner_inv_at_T
 
     tax_meta = projection.get("tax_meta", {})
     renter_acct = projection.get("renter_accounts", {})
@@ -471,6 +506,9 @@ def compute_summary(projection: dict, params: dict) -> dict:
         "renter_final_tfsa": _final("tfsa"),
         "renter_final_rrsp": _final("rrsp"),
         "renter_final_taxable": _final("taxable"),
+        # ---- Transaction costs ----
+        "purchase_closing_costs": purchase_costs,
+        "selling_costs_final": selling_costs_final,
     }
 
 

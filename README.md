@@ -36,9 +36,14 @@ sets annual **RRSP** room (18% of income, capped) and your marginal tax rate.
 At liquidation the renter's portfolio is taxed (TFSA free, RRSP as income,
 taxable on gains); the owner's home is a **principal residence** and is
 capital-gains-tax-free. RRSP refunds are reinvested and withdrawals are taxed at
-a lower retirement rate (`--retirement-rate`, default `0.30`). See
-[`knowledge/METHODOLOGY_GAPS.md`](knowledge/METHODOLOGY_GAPS.md) for assumptions
-and limitations.
+a lower retirement rate (`--retirement-rate`, default `0.30`).
+
+**Transaction costs** are included too: **land-transfer tax** at purchase
+(Ontario provincial + Toronto municipal for North York FSAs; ~$33k on a $1M home)
+plus legal/inspection, and **realtor commission + HST** at sale (~5% + 13%). Use
+`--first-time-buyer` for LTT rebates, or `--no-transaction-costs` to exclude them.
+See [`knowledge/METHODOLOGY_GAPS.md`](knowledge/METHODOLOGY_GAPS.md) for
+assumptions and limitations.
 
 ### The five charts
 

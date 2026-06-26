@@ -109,6 +109,76 @@ def rrsp_annual_room(income: float) -> float:
     return min(RRSP_CONTRIBUTION_PCT * float(income), RRSP_ANNUAL_DOLLAR_CAP)
 
 
+# --------------------------------------------------------------------------- #
+# Transaction costs: land-transfer tax at purchase, realtor + legal at sale.
+# --------------------------------------------------------------------------- #
+REALTOR_COMMISSION_RATE = 0.05   # ~5% of sale price (total, both agents)
+HST_RATE = 0.13                  # Ontario HST, charged ON the commission
+SALE_LEGAL_FEE = 1_500.0         # legal/discharge fees at sale
+PURCHASE_LEGAL_FEE = 2_500.0     # legal + inspection/appraisal at purchase
+
+# Ontario provincial Land Transfer Tax — marginal brackets (lower, rate).
+_ON_LTT = [
+    (0.0, 0.005), (55_000.0, 0.01), (250_000.0, 0.015),
+    (400_000.0, 0.02), (2_000_000.0, 0.025),
+]
+# Toronto Municipal LTT mirrors the provincial brackets up to $3M (the extra
+# luxury tiers above $3M are not modelled).
+_TORONTO_MLTT = [
+    (0.0, 0.005), (55_000.0, 0.01), (250_000.0, 0.015),
+    (400_000.0, 0.02), (2_000_000.0, 0.025),
+]
+ON_FIRST_TIME_REBATE = 4_000.0        # max Ontario first-time-buyer LTT rebate
+TORONTO_FIRST_TIME_REBATE = 4_475.0   # max Toronto first-time-buyer MLTT rebate
+
+
+def _bracketed_tax(price: float, brackets: list) -> float:
+    """Sum a marginal-bracket tax over ``price``."""
+    total = 0.0
+    for i, (lo, rate) in enumerate(brackets):
+        hi = brackets[i + 1][0] if i + 1 < len(brackets) else float("inf")
+        if price > lo:
+            total += (min(price, hi) - lo) * rate
+        else:
+            break
+    return total
+
+
+def ontario_ltt(price: float) -> float:
+    """Ontario provincial land-transfer tax on a purchase price."""
+    return _bracketed_tax(float(price), _ON_LTT)
+
+
+def toronto_mltt(price: float) -> float:
+    """Toronto municipal land-transfer tax (in addition to the provincial LTT)."""
+    return _bracketed_tax(float(price), _TORONTO_MLTT)
+
+
+def land_transfer_tax(price: float, region: str = "ontario", first_time: bool = False) -> float:
+    """Total land-transfer tax. ``region='toronto'`` adds the municipal LTT.
+
+    For non-Ontario postal codes the provincial Ontario LTT is used as a rough
+    national proxy (provinces vary widely — AB/SK have none, BC/QC differ).
+    """
+    total = ontario_ltt(price)
+    rebate = ON_FIRST_TIME_REBATE if first_time else 0.0
+    if region == "toronto":
+        total += toronto_mltt(price)
+        if first_time:
+            rebate += TORONTO_FIRST_TIME_REBATE
+    return max(0.0, total - rebate)
+
+
+def purchase_closing_costs(
+    price: float,
+    region: str = "ontario",
+    first_time: bool = False,
+    legal_fee: float = PURCHASE_LEGAL_FEE,
+) -> float:
+    """One-time cash cost of buying: land-transfer tax + legal/inspection fees."""
+    return land_transfer_tax(price, region, first_time) + float(legal_fee)
+
+
 SOURCES = {
     "marginal_rates": "https://www.taxtips.ca/taxrates/on.htm (Ontario combined 2024)",
     "tfsa_limits": "https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/tax-free-savings-account/contributions.html",

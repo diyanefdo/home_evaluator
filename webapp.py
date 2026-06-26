@@ -449,6 +449,14 @@ FORM = PAGE_HEAD + """
         </select>
         <small>Where the renter's savings go.</small>
       </div>
+      <div class="field">
+        <label for="first_time">First-time buyer?</label>
+        <select id="first_time" name="first_time">
+          <option value="false" selected>No</option>
+          <option value="true">Yes</option>
+        </select>
+        <small>Applies land-transfer-tax rebates.</small>
+      </div>
     </div>
     <button type="submit">Evaluate scenario</button>
   </form>
@@ -490,6 +498,7 @@ def evaluate(
     age: int = 35,
     income: float = 120000.0,
     strategy: str = "shelter-first",
+    first_time: bool = False,
     # Optional power-user overrides (default to regional data when omitted).
     rate: float | None = None,
     appreciation: float | None = None,
@@ -524,6 +533,8 @@ def evaluate(
     args = argparse.Namespace(
         price=price, down=down, years=years, postal=postal,
         age=age, income=income, account_strategy=strategy, retirement_rate=retirement_rate,
+        first_time_buyer=first_time, commission_rate=None, purchase_legal=None,
+        no_transaction_costs=False,
         rate=rate, appreciation=appreciation, rent=rent, rent_growth=rent_growth,
         property_tax_rate=property_tax_rate, investment_return=investment_return,
         insurance=insurance, hoa=hoa, out=None, no_charts=False,
@@ -600,7 +611,7 @@ def evaluate(
         '</section>'
     )
 
-    # Optional after-tax stat tiles (only when the tax layer ran).
+    # Optional after-tax + transaction-cost stat tiles (only when they ran).
     tax_tiles = ""
     if after_tax:
         tax_tiles = (
@@ -608,9 +619,16 @@ def evaluate(
             f'<span class="v" style="font-size:.95rem">{strat_label}</span></div>'
             f'<div class="stat"><span class="k">Renter tax at sale</span>'
             f'<span class="v">{sym}{summary.get("renter_tax_paid", 0):,.0f}</span></div>'
-            f'<div class="stat"><span class="k">Buyer tax at sale</span>'
-            f'<span class="v">{sym}{summary.get("buyer_tax_paid", 0):,.0f} <small>(home exempt)</small></span></div>'
         )
+        if summary.get("purchase_closing_costs") or summary.get("selling_costs_final"):
+            tax_tiles += (
+                f'<div class="stat"><span class="k">Buy closing costs</span>'
+                f'<span class="v">{sym}{summary.get("purchase_closing_costs", 0):,.0f} '
+                f'<small>(land-transfer + legal)</small></span></div>'
+                f'<div class="stat"><span class="k">Sell costs at yr {years}</span>'
+                f'<span class="v">{sym}{summary.get("selling_costs_final", 0):,.0f} '
+                f'<small>(commission + HST)</small></span></div>'
+            )
 
     stats = (
         '<div class="result-summary reveal">'

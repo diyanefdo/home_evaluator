@@ -20,6 +20,7 @@ TORONTO_M2J = {
     "property_tax_rate": 0.007673,     # Toronto 2026 total residential rate 0.7673% -> $7,673 on $1M
     "property_tax_growth_rate": 0.035, # 3.5%/yr long-run
     "sp500_nominal_cagr": 0.10,        # 10.0%; 30yr nominal w/ dividends = 10.31% (real 7.57%)
+    "ltt_region": "toronto",           # land-transfer tax: Ontario provincial + Toronto municipal
 }
 
 # Canada-wide fallbacks for any non-Toronto postal code
@@ -33,6 +34,7 @@ NATIONAL_DEFAULTS = {
     "property_tax_rate": 0.01,         # 1% of value/yr Canada-wide avg (varies 0.3%-2.5% by city)
     "property_tax_growth_rate": 0.03,  # 3%/yr
     "sp500_nominal_cagr": 0.10,        # 10% nominal w/ dividends
+    "ltt_region": "ontario",           # land-transfer tax: Ontario provincial used as a national proxy
 }
 
 # First 3 chars of a Canadian postal code = Forward Sortation Area (FSA).

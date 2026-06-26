@@ -562,8 +562,9 @@ def _chart_networth_comparison(projection, params, out_dir, symbol) -> str:
     )
     if after_tax:
         footnote += (
-            " After-tax: the home is a principal residence (capital-gains-tax-free), while the "
-            "renter's portfolio is taxed at liquidation (TFSA free, RRSP as income, taxable on gains)."
+            " After-tax: the home is a principal residence (capital-gains-tax-free) but net of "
+            "selling costs; the renter's portfolio is taxed at liquidation (TFSA free, RRSP as "
+            "income, taxable on gains) and is credited the buyer's purchase closing costs."
         )
     fig.text(0.012, 0.012, footnote, fontsize=7.5, color="#555555")
 
