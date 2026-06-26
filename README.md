@@ -1,7 +1,7 @@
 # Canadian Buy-vs-Rent Home Evaluator
 
 A reusable command-line tool that turns **four inputs** — house price, down
-payment, mortgage term, and a Canadian postal code — into **four financial
+payment, mortgage term, and a Canadian postal code — into **five financial
 charts** plus an executive summary comparing buying vs. renting-and-investing.
 
 The work is split across three layers, each built from one of the project's
@@ -23,7 +23,7 @@ python3 -m evaluator.cli --price 1000000 --down 200000 --years 30 --postal "M2J 
 `--down` accepts a dollar amount (`200000`) or a percentage of price (`20%`).
 Charts are written to `./charts_output` by default (`--out` to change).
 
-### The four charts
+### The five charts
 
 1. **Home value, mortgage balance & equity** over the term, with loan-paid-off
    milestone markers.
@@ -34,6 +34,9 @@ Charts are written to `./charts_output` by default (`--out` to change).
 4. **Homeowner-advantage scenario** — after the crossover year (when rising rent
    exceeds the fixed ownership cost), the homeowner invests
    `MAX(0, rent − ownership cost)`.
+5. **Total net worth — homeowner vs renter** — head-to-head wealth over the term
+   (owner equity + side investments vs renter portfolio), with the lead-change
+   year marked. Both scenarios spend the same each month, so it's apples-to-apples.
 
 ### Assumption overrides
 

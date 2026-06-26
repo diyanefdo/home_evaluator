@@ -1,6 +1,6 @@
 """Charting layer for the buy-vs-rent evaluator.
 
-This module renders the four financial-comparison charts from a pre-computed
+This module renders the five financial-comparison charts from a pre-computed
 ``projection`` dict (built by the upstream projection module) and a ``params``
 dict of input assumptions. It is a pure rendering layer: it performs no
 financial modelling of its own beyond trivial derived quantities (e.g. summing
@@ -113,7 +113,7 @@ Any additional params keys are ignored by this module.
 ENTRY POINT
 --------------------------------------------------------------------------
     generate_charts(projection, params, out_dir) -> list[str]
-returns the list of 4 saved PNG file paths in chart order [1, 2, 3, 4].
+returns the list of 5 saved PNG file paths in chart order [1, 2, 3, 4, 5].
 """
 
 from __future__ import annotations
@@ -123,6 +123,9 @@ import os
 import matplotlib
 
 matplotlib.use("Agg")  # non-interactive backend: savefig only, no display.
+# Treat '$' literally in all text; otherwise matplotlib reads a pair of dollar
+# signs (e.g. "$4.4M vs $5.9M") as LaTeX math mode and mangles the string.
+matplotlib.rcParams["text.parse_math"] = False
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
@@ -460,10 +463,105 @@ def _chart_owner_advantage(projection, params, out_dir, symbol) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Chart 5: Total net worth — homeowner vs renter
+# --------------------------------------------------------------------------- #
+def _chart_networth_comparison(projection, params, out_dir, symbol) -> str:
+    """Head-to-head total net worth of the two scenarios over the term.
+
+    Homeowner net worth = home equity + owner-advantage portfolio.
+    Renter net worth    = renter portfolio (down payment + invested savings).
+    The two scenarios spend the same amount every month, so this is a fair
+    apples-to-apples wealth comparison.
+    """
+    T = int(params["term_years"])
+    years = _require(projection, "years", T + 1)
+    equity = _require(projection, "equity", T + 1)
+    owner_adv = _require(projection, "owner_adv_portfolio", T + 1)
+    renter = _require(projection, "renter_portfolio", T + 1)
+
+    owner_nw = equity + owner_adv
+
+    fig, ax = plt.subplots(figsize=(11, 6.5))
+
+    ax.plot(years, owner_nw, color="#1f77b4", lw=2.4, label="Homeowner net worth (equity + investments)")
+    ax.plot(years, renter, color="#ff7f0e", lw=2.4, label="Renter net worth (portfolio)")
+
+    # Shade who is ahead: green where the owner leads, orange where the renter does.
+    ax.fill_between(years, owner_nw, renter, where=(owner_nw >= renter),
+                    interpolate=True, color="#1f77b4", alpha=0.10)
+    ax.fill_between(years, owner_nw, renter, where=(owner_nw < renter),
+                    interpolate=True, color="#ff7f0e", alpha=0.10)
+
+    # Mark the lead-change year(s): where (owner - renter) flips sign.
+    diff = owner_nw - renter
+    sign = np.sign(diff)
+    for i in range(1, len(sign)):
+        if sign[i - 1] != 0 and sign[i] != 0 and sign[i] != sign[i - 1]:
+            # Linear-interpolate the exact crossover year between the two points.
+            d0, d1 = diff[i - 1], diff[i]
+            frac = d0 / (d0 - d1) if (d0 - d1) != 0 else 0.0
+            xc = years[i - 1] + frac
+            yc = renter[i - 1] + frac * (renter[i] - renter[i - 1])
+            ax.scatter([xc], [yc], color="#444444", zorder=6, s=34)
+            ax.annotate(
+                f"lead change\nyr {xc:.1f}",
+                xy=(xc, yc),
+                xytext=(0, -28),
+                textcoords="offset points",
+                ha="center",
+                fontsize=8,
+                color="#222222",
+                arrowprops=dict(arrowstyle="->", color="#444444", lw=0.9),
+            )
+
+    # Final values + the year-T gap.
+    o_final, r_final = owner_nw[-1], renter[-1]
+    for val, color in ((o_final, "#1f77b4"), (r_final, "#ff7f0e")):
+        ax.scatter([years[-1]], [val], color=color, zorder=6, s=40)
+    leader = "homeowner" if o_final >= r_final else "renter"
+    # Anchored in open upper-centre space (not on the final point) to avoid
+    # colliding with the title and the curves at the right edge.
+    ax.text(
+        0.36,
+        0.90,
+        f"Year {T}: {leader} ahead by {_money_str(abs(o_final - r_final), symbol)}\n"
+        f"owner {_money_str(o_final, symbol)}  vs  renter {_money_str(r_final, symbol)}",
+        transform=ax.transAxes,
+        ha="left",
+        va="top",
+        fontsize=9,
+        fontweight="bold",
+        bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="#444444", alpha=0.9),
+    )
+
+    ax.set_title("Chart 5 — Total Net Worth: Homeowner vs Renter", fontsize=13, fontweight="bold")
+    ax.set_xlabel("Year")
+    ax.set_ylabel("Total net worth")
+    ax.set_xlim(0, T)
+    ax.set_ylim(bottom=0)
+    _style_axes(ax, symbol)
+    ax.legend(loc="upper left", framealpha=0.9)
+    fig.text(
+        0.012,
+        0.012,
+        "Both scenarios spend the same amount each month; the difference is held as home equity "
+        "(owner) or invested (renter). Fair apples-to-apples wealth comparison.",
+        fontsize=7.5,
+        color="#555555",
+    )
+
+    path = os.path.join(out_dir, "chart5_networth_comparison.png")
+    fig.tight_layout(rect=(0, 0.03, 1, 1))
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+    return path
+
+
+# --------------------------------------------------------------------------- #
 # Public entry point
 # --------------------------------------------------------------------------- #
 def generate_charts(projection: dict, params: dict, out_dir: str) -> list[str]:
-    """Render all four buy-vs-rent charts to ``out_dir``.
+    """Render all five buy-vs-rent charts to ``out_dir``.
 
     Parameters
     ----------
@@ -479,7 +577,7 @@ def generate_charts(projection: dict, params: dict, out_dir: str) -> list[str]:
     Returns
     -------
     list[str]
-        Absolute/relative paths of the four saved PNGs, in chart order 1..4.
+        Absolute/relative paths of the five saved PNGs, in chart order 1..5.
     """
     if "term_years" not in params:
         raise KeyError("params must include 'term_years'")
@@ -491,6 +589,7 @@ def generate_charts(projection: dict, params: dict, out_dir: str) -> list[str]:
         _chart_cost_breakdown(projection, params, out_dir, symbol),
         _chart_renter_investment(projection, params, out_dir, symbol),
         _chart_owner_advantage(projection, params, out_dir, symbol),
+        _chart_networth_comparison(projection, params, out_dir, symbol),
     ]
     return paths
 
