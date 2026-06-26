@@ -31,17 +31,47 @@ app = FastAPI(title="Canadian Buy-vs-Rent Home Evaluator")
 
 # --------------------------------------------------------------------------- #
 # Optional HTTP basic-auth (recommended when exposed on a public link).
-# Enabled only when EVALUATOR_PASSWORD is set, so local/dev runs stay open.
+#
+# Toggle with EVALUATOR_AUTH:
+#   - unset       -> auto: auth is ON when EVALUATOR_PASSWORD is set, else OFF
+#   - on/1/true   -> force ON  (requires EVALUATOR_PASSWORD, else startup error)
+#   - off/0/false -> force OFF (no login, even if a password is configured)
 # Username defaults to "admin"; override with EVALUATOR_USER.
 # --------------------------------------------------------------------------- #
 _AUTH_USER = os.environ.get("EVALUATOR_USER", "admin")
-_AUTH_PASS = os.environ.get("EVALUATOR_PASSWORD")  # None => auth disabled
+_AUTH_PASS = os.environ.get("EVALUATOR_PASSWORD")  # None/"" => no credentials set
 _security = HTTPBasic(auto_error=False)
+
+_TRUTHY = {"1", "true", "yes", "on"}
+_FALSY = {"0", "false", "no", "off"}
+
+
+def _auth_enabled() -> bool:
+    """Decide whether basic-auth is active, honouring the EVALUATOR_AUTH flag."""
+    flag = os.environ.get("EVALUATOR_AUTH", "").strip().lower()
+    if flag in _TRUTHY:
+        if not _AUTH_PASS:
+            raise RuntimeError(
+                "EVALUATOR_AUTH is on but EVALUATOR_PASSWORD is not set — "
+                "set a password or turn the flag off."
+            )
+        return True
+    if flag in _FALSY:
+        return False
+    if flag:  # set to something we don't recognise
+        raise RuntimeError(
+            f"EVALUATOR_AUTH={flag!r} is not understood; use on/off (or leave unset)."
+        )
+    # Unset => auto: on only when a password is configured.
+    return bool(_AUTH_PASS)
+
+
+_AUTH_ON = _auth_enabled()
 
 
 def require_auth(credentials: HTTPBasicCredentials | None = Depends(_security)) -> None:
-    """Enforce basic-auth when EVALUATOR_PASSWORD is configured; else no-op."""
-    if not _AUTH_PASS:
+    """Enforce basic-auth when enabled (see _auth_enabled); else no-op."""
+    if not _AUTH_ON:
         return
     ok = credentials is not None and secrets.compare_digest(
         credentials.username, _AUTH_USER

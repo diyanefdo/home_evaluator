@@ -272,15 +272,27 @@ any device can open — no domain required, free, and the URL does not change.
 
 ### 3.5 App-level basic-auth (use whenever the link is public)
 
-`webapp.py` enforces HTTP basic-auth **only when `EVALUATOR_PASSWORD` is set**
-(so local runs stay open). Set credentials via a gitignored `.env` file that
-`docker compose` reads automatically:
+`webapp.py` enforces HTTP basic-auth based on **`EVALUATOR_AUTH`** plus the
+credentials. Set everything via a gitignored `.env` file that `docker compose`
+reads automatically:
 
 ```bash
 cp .env.example .env
 # edit .env -> EVALUATOR_USER=you  EVALUATOR_PASSWORD=a-strong-password
 docker compose up -d            # picks up .env; browsers now prompt for login
 ```
+
+**Login toggle (`EVALUATOR_AUTH`):**
+
+| `EVALUATOR_AUTH` | Behaviour |
+|------------------|-----------|
+| *(empty / unset)* | **auto** — login is ON when `EVALUATOR_PASSWORD` is set, OFF otherwise |
+| `on` (or `1`/`true`/`yes`) | force login ON (a password is **required**, else the app refuses to start) |
+| `off` (or `0`/`false`/`no`) | force login OFF, even if a password is set (handy for local/private use) |
+
+So you can keep a password in `.env` permanently and just flip
+`EVALUATOR_AUTH=off`/`on` to switch login off and on without deleting it.
+After changing `.env`, apply it with `docker compose up -d`.
 
 `/healthz` stays open so the container healthcheck keeps working.
 
