@@ -121,3 +121,60 @@ yes add that
 ## 2026-06-26 16:31:00
 
 commit and push
+
+## 2026-06-26 16:32:16
+
+why was agent-memory/ ignored
+
+## 2026-06-26 16:33:02
+
+keep it ignored
+
+## 2026-06-26 17:04:50
+
+/statusline
+
+## 2026-06-26 17:05:52
+
+<task-notification>
+<task-id>a8627125d2326ce8f</task-id>
+<tool-use-id>toolu_011B5TFxHnjuae4i7EWaPHaX</tool-use-id>
+<output-file>/tmp/claude-1000/-home-diyanefdo-home-evaluator/d9a54b8e-fa1f-42c9-8e1d-d3b3c114c223/tasks/a8627125d2326ce8f.output</output-file>
+<status>completed</status>
+<summary>Agent "Configure status line" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Your statusLine is already fully configured and correctly reflects your `.bashrc` PS1. The existing script at `/home/diyanefdo/.claude/statusline-command.sh` already:
+
+1. Converts your PS1 color scheme faithfully:
+   - `\[\033[01;32m\]\u@\h` → bold green `$(whoami)@$(hostname -s)`
+   - `\[\033[01;34m\]\w` → bold blue path (read from the JSON `cwd` field)
+   - Trailing `\$` is removed as required
+
+2. Adds useful extras beyond the base PS1:
+   - Bold yellow git branch (via `git --no-optional-locks`)
+   - Bold cyan model name (from JSON `model.display_name`)
+   - Bold magenta context usage percentage (from JSON `context_window.used_percentage`)
+
+The settings file `/home/diyanefdo/.claude/settings.json` already points to this script via `"command": "bash /home/diyanefdo/.claude/statusline-command.sh"`. No changes were needed.
+
+---
+
+Note: For any future changes to the status line (such as adding rate limit display, PR info, vim mode, or restyling), use the **statusline-setup** agent. You can simply ask Claude to make changes to the status line and it will invoke this agent.</result>
+<usage><subagent_tokens>9513</subagent_tokens><tool_uses>4</tool_uses><duration_ms>59134</duration_ms></usage>
+</task-notification>
+
+## 2026-06-26 18:03:44
+
+can you read the METHODOLOGY_GAPS.md file and tell me what things need to be improved
+
+## 2026-06-26 18:10:02
+
+fix the stale reference and start implementing the tax layer. as for the tax layer, have the tool also ask for the user's age so the tool can calculate the contribution rooms for RRSP and TFSA and the remaining investments go into a registered account. have the user also choose an option to use up rrsp and tfsa first then registered account vs entirely using taxable registered account.
+
+## 2026-06-26 18:31:01
+
+yes commit and push
+
+## 2026-06-26 18:31:20
+
+i still dont see context and all that that info here
