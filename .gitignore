@@ -12,3 +12,9 @@ _*_test/
 
 # Local secrets (basic-auth credentials for the web app)
 .env
+
+# Claude Code personal settings (per-machine, contains absolute paths)
+.claude/settings.local.json
+
+# Claude Code agent scratch memory (local)
+.claude/agent-memory/

@@ -8,5 +8,5 @@ __pycache__
 .env
 .claude
 knowledge
-prompts/
+prompts.md
 README.md
