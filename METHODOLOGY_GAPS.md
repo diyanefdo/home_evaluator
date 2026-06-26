@@ -1,0 +1,122 @@
+# Methodology Gaps & Concerns — Buy vs Rent Model
+
+Status notes on the rent-vs-buy comparison logic, captured 2026-06-25 for later
+revisiting. The numbers below reference the baseline scenario:
+**$1,000,000 home / $200,000 down / 30yr / 4.4% fixed / M2J 0E8**, which currently
+shows the **renter ahead by ~$1.57M at year 30** ($5.95M vs $4.39M).
+
+---
+
+## What the model gets right ✅
+
+The core "buy vs. rent-and-invest-the-difference" framework is sound and
+correctly implemented:
+
+- **Matched cash flows.** Both scenarios spend the same amount each month. The
+  renter invests the down payment up front plus `MAX(0, ownership_cost − rent)`;
+  the owner invests `MAX(0, rent − ownership_cost)` after crossover. Outlays are
+  equal in both regimes → a genuine apples-to-apples wealth comparison.
+- **No double-counting.** Owner net worth = home equity + side investments;
+  renter net worth = portfolio. The principal the owner "overpays" vs rent is
+  captured as equity, not also as an investment.
+- **Down-payment opportunity cost** is correctly credited to the renter.
+
+So the comparison is directionally valid. The issues below affect the
+**magnitude** of the result, not the structure — but several are large enough to
+plausibly flip the conclusion.
+
+---
+
+## Gaps that bias the result ⚠️
+
+Ordered by materiality. "Direction" = which side the omission currently flatters.
+
+### 1. Capital-gains tax on the renter's portfolio — **overstates renter** (large)
+The renter's ~$5.95M is roughly **$5.5M of investment gains**. In a taxable
+account, Canadian capital gains are taxed (50% inclusion × marginal rate ≈ ~25%
+effective at high incomes) → on the order of **$1M+ owed at liquidation**.
+TFSA/RRSP shelters only a fraction of a portfolio this size. The model applies
+**no tax** to the portfolio.
+
+### 2. Principal-residence exemption — **understates buyer** (large)
+A Canadian primary residence is **100% capital-gains-tax-free** on sale (see
+`Notes.txt`: "is primary house taxed — no"). The home's ~$4.3M terminal value
+carries no tax, while the renter's gains do. By taxing neither side, the model
+quietly erases the single biggest tax advantage of buying in Canada.
+
+> Gaps #1 and #2 together are the headline issue: correcting them roughly cancels
+> the renter's $1.57M lead before any other adjustment.
+
+### 3. Selling costs — **overstates buyer** (medium)
+Realtor commission (~5%) + HST on commission on a ~$4.3M sale ≈ **~$240k** haircut
+on terminal equity. Not modeled.
+
+### 4. Purchase transaction costs — **overstates buyer** (small–medium)
+Toronto levies **both** Ontario and municipal land-transfer tax ≈ **~$33k** on a
+$1M home, plus legal/inspection fees (~$2–3k). First-time-buyer rebates may
+offset part. Not modeled. (A `closing_costs` param is referenced but unused.)
+
+### 5. Terminal asymmetry / imputed rent — **understates buyer** (medium)
+At year 30 the owner lives nearly rent-free (~$50k/yr tax + maintenance) while the
+renter keeps paying ~$10k/mo and rising. The year-30 net-worth **snapshot** does
+not value the owner's much lower future housing cost. A fairer comparison extends
+a few years past payoff or adds a terminal housing-cost differential.
+
+### 6. Headline is fragile to the appreciation assumption — **sensitivity** (high)
+The owner controls a $1M appreciating asset on $200k down — **5:1 leverage** — so
+the result hinges almost entirely on the **home appreciation (5%) vs S&P return
+(10%)** gap.
+- Current run uses **5%** appreciation (deliberately conservative).
+- Scraper found the **historical GTA rate is ~7%**.
+- At ~7%, the owner likely wins outright even before the tax corrections.
+
+The point estimate is far less trustworthy than the sensitivity. A small
+appreciation × return grid (e.g. 4/5/6/7% × 7/10%) would make this visible.
+
+### 7. Smaller modeling simplifications
+- **Rent comparable is uncertain.** $3,800/mo implies a ~4.6% gross yield;
+  Toronto detached yields run ~3–4%, so true comparable rent may be *lower*,
+  which would let the renter invest more early (favors renter). Big lever,
+  thinly sourced (scraper flagged this).
+- **No inflation adjustment.** All figures nominal 2056 dollars. Fine for a
+  like-for-like comparison, but the absolute numbers look bigger than they feel.
+- **Home insurance held flat** at $1,500/yr (should grow with inflation; minor).
+- **Property tax** grows on its own bill at 3.5%/yr, decoupled from appreciation
+  — realistic, not a flaw, but worth noting.
+
+---
+
+## Net effect
+
+The omissions push in both directions but do **not** cancel:
+
+| Correction | Direction | Rough magnitude |
+|---|---|---|
+| Capital-gains tax on portfolio | → buyer | ~$1M+ |
+| Principal-residence exemption | → buyer | (keeps owner's ~$4.3M tax-free) |
+| Selling costs | → renter | ~$240k |
+| Purchase transaction costs | → renter | ~$35k |
+| Lower terminal housing cost | → buyer | not captured |
+
+The investment-tax + principal-residence pair (favoring the buyer) clearly
+outweighs the transaction costs (favoring the renter). **Bottom line: the current
+model tilts toward renting by ignoring Canadian tax reality; a corrected version
+would likely land near parity at 5% appreciation and favor buying at ~7%.**
+
+---
+
+## Recommended fixes, in priority order
+
+1. **Tax layer (highest value).** Capital-gains tax on the renter's taxable
+   portfolio, with optional TFSA/RRSP sheltering; principal-residence exemption
+   for the owner. This is the difference between a model that flatters renting and
+   one a Canadian could actually trust.
+2. **Transaction costs.** Land-transfer tax (Ontario + Toronto) at purchase;
+   realtor commission + HST at sale. Wire up the existing unused `closing_costs`
+   param.
+3. **Sensitivity output.** An appreciation × return grid so the result's
+   fragility is obvious at a glance.
+4. **Terminal-value handling.** Extend a few years past payoff, or annotate the
+   owner's post-payoff housing-cost advantage.
+5. **Lower-priority polish.** Inflation-adjusted (real) view toggle; grow
+   insurance; let rent comparable be sourced/overridden more transparently.
