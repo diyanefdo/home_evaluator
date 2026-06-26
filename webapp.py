@@ -58,20 +58,30 @@ MAX_YEARS = 50
 MAX_PRICE = 100_000_000
 
 
-PAGE_HEAD = """<!doctype html><html><head><meta charset="utf-8">
+PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Home Evaluator</title>
 <style>
- body{{font-family:system-ui,sans-serif;max-width:1000px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}}
- h1{{font-size:1.5rem}} label{{display:block;margin:.7rem 0 .2rem;font-weight:600}}
- input{{width:100%;padding:.5rem;border:1px solid #ccc;border-radius:6px;font-size:1rem}}
- .grid{{display:grid;grid-template-columns:1fr 1fr;gap:1rem}}
- button{{margin-top:1.2rem;padding:.6rem 1.4rem;font-size:1rem;border:0;border-radius:6px;
-   background:#1f77b4;color:#fff;cursor:pointer}}
- img{{width:100%;margin:1rem 0;border:1px solid #eee;border-radius:6px}}
- .summary{{background:#f5f8fb;border:1px solid #dce6ef;border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}}
- .err{{background:#fdf3ef;border:1px solid #e0b4a4;border-radius:8px;padding:1rem 1.2rem;color:#8c3b1e}}
- a{{color:#1f77b4}}
+ *{box-sizing:border-box}
+ body{font-family:system-ui,-apple-system,sans-serif;max-width:1000px;margin:0 auto;
+   padding:1.5rem 1rem;color:#1a1a1a;line-height:1.45;-webkit-text-size-adjust:100%}
+ h1{font-size:1.4rem;margin:.2rem 0 1rem}
+ label{display:block;margin:.7rem 0 .25rem;font-weight:600}
+ /* 16px input font stops iOS Safari from auto-zooming on focus */
+ input{width:100%;padding:.6rem;border:1px solid #ccc;border-radius:8px;font-size:16px}
+ /* auto-fit collapses the form from 2 columns to 1 on narrow screens */
+ .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.75rem 1rem}
+ button{margin-top:1.2rem;padding:.8rem 1.4rem;font-size:1rem;border:0;border-radius:8px;
+   background:#1f77b4;color:#fff;cursor:pointer;width:100%;max-width:260px}
+ img{width:100%;height:auto;display:block;margin:1rem 0;border:1px solid #eee;border-radius:8px}
+ .summary{background:#f5f8fb;border:1px solid #dce6ef;border-radius:10px;padding:.9rem 1.1rem;margin:1rem 0}
+ .err{background:#fdf3ef;border:1px solid #e0b4a4;border-radius:10px;padding:.9rem 1.1rem;color:#8c3b1e}
+ a{color:#1f77b4}
+ @media (max-width:480px){
+   body{padding:1rem .8rem}
+   h1{font-size:1.2rem}
+   button{width:100%;max-width:none}
+ }
 </style></head><body>"""
 
 PAGE_FOOT = "</body></html>"
