@@ -178,3 +178,31 @@ yes commit and push
 ## 2026-06-26 18:31:20
 
 i still dont see context and all that that info here
+
+## 2026-06-26 18:32:00
+
+did u also update teh methodology md file to indicate the tax issues were addressed
+
+## 2026-06-26 18:33:17
+
+have to commited and pushed
+
+## 2026-06-26 18:33:42
+
+my postal code is M2J 0E8. give me some stuff i can do with my gf after work right now
+
+## 2026-06-26 18:34:51
+
+what is Buyer tax at sale (home exempt)
+
+## 2026-06-26 18:35:25
+
+in the methodology md file what else is there
+
+## 2026-06-26 18:41:04
+
+can you now tackle the selling costs and purchase transaction costs part for our lool
+
+## 2026-06-26 18:47:43
+
+yes
