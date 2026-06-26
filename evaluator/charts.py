@@ -477,14 +477,27 @@ def _chart_networth_comparison(projection, params, out_dir, symbol) -> str:
     years = _require(projection, "years", T + 1)
     equity = _require(projection, "equity", T + 1)
     owner_adv = _require(projection, "owner_adv_portfolio", T + 1)
-    renter = _require(projection, "renter_portfolio", T + 1)
+    renter_pre = _require(projection, "renter_portfolio", T + 1)
 
-    owner_nw = equity + owner_adv
+    # Prefer the after-tax net-worth series (tax layer); fall back to the pre-tax
+    # equity+portfolio definition if those arrays aren't present.
+    owner_at = projection.get("buyer_net_worth_after_tax")
+    renter_at = projection.get("renter_net_worth_after_tax")
+    after_tax = owner_at is not None and renter_at is not None
+    if after_tax:
+        owner_nw = np.asarray(owner_at, dtype=float)
+        renter = np.asarray(renter_at, dtype=float)
+    else:
+        owner_nw = equity + owner_adv
+        renter = renter_pre
 
+    tax_tag = " (after tax)" if after_tax else ""
     fig, ax = plt.subplots(figsize=(11, 6.5))
 
-    ax.plot(years, owner_nw, color="#1f77b4", lw=2.4, label="Homeowner net worth (equity + investments)")
-    ax.plot(years, renter, color="#ff7f0e", lw=2.4, label="Renter net worth (portfolio)")
+    ax.plot(years, owner_nw, color="#1f77b4", lw=2.4,
+            label=f"Homeowner net worth{tax_tag} (equity + investments)")
+    ax.plot(years, renter, color="#ff7f0e", lw=2.4,
+            label=f"Renter net worth{tax_tag} (portfolio)")
 
     # Shade who is ahead: green where the owner leads, orange where the renter does.
     ax.fill_between(years, owner_nw, renter, where=(owner_nw >= renter),
@@ -534,21 +547,25 @@ def _chart_networth_comparison(projection, params, out_dir, symbol) -> str:
         bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="#444444", alpha=0.9),
     )
 
-    ax.set_title("Chart 5 — Total Net Worth: Homeowner vs Renter", fontsize=13, fontweight="bold")
+    title_tax = " (After Tax)" if after_tax else ""
+    ax.set_title(f"Chart 5 — Total Net Worth: Homeowner vs Renter{title_tax}",
+                 fontsize=13, fontweight="bold")
     ax.set_xlabel("Year")
-    ax.set_ylabel("Total net worth")
+    ax.set_ylabel("Total net worth" + (" (after tax)" if after_tax else ""))
     ax.set_xlim(0, T)
     ax.set_ylim(bottom=0)
     _style_axes(ax, symbol)
     ax.legend(loc="upper left", framealpha=0.9)
-    fig.text(
-        0.012,
-        0.012,
+    footnote = (
         "Both scenarios spend the same amount each month; the difference is held as home equity "
-        "(owner) or invested (renter). Fair apples-to-apples wealth comparison.",
-        fontsize=7.5,
-        color="#555555",
+        "(owner) or invested (renter)."
     )
+    if after_tax:
+        footnote += (
+            " After-tax: the home is a principal residence (capital-gains-tax-free), while the "
+            "renter's portfolio is taxed at liquidation (TFSA free, RRSP as income, taxable on gains)."
+        )
+    fig.text(0.012, 0.012, footnote, fontsize=7.5, color="#555555")
 
     path = os.path.join(out_dir, "chart5_networth_comparison.png")
     fig.tight_layout(rect=(0, 0.03, 1, 1))

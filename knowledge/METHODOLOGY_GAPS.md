@@ -7,6 +7,37 @@ shows the **renter ahead by ~$1.57M at year 30** ($5.95M vs $4.39M).
 
 ---
 
+## ✅ UPDATE 2026-06-26 — Tax layer implemented (gaps #1 & #2 addressed)
+
+A registered-account + capital-gains **tax layer** now ships in
+`evaluator/tax.py` and is wired through the projection, CLI, web form, and
+Chart 5. Specifically:
+
+- **Renter portfolio is now taxed at liquidation** (gap #1): TFSA tax-free,
+  RRSP fully taxed as ordinary income, taxable account taxed on its capital
+  gains (50% inclusion × marginal rate).
+- **Principal-residence exemption credited** (gap #2): the owner's home equity is
+  never taxed.
+- New inputs: **age** (→ TFSA cumulative room), **income** (→ RRSP room + marginal
+  rate), and an **account strategy** toggle (*shelter-first* TFSA→RRSP→taxable, vs
+  *taxable-only*). RRSP refunds are reinvested; withdrawals/realized gains are
+  taxed at a lower **retirement** marginal rate (default 30%).
+- Chart 5 and the headline net-worth gap are now **after-tax**.
+
+**New result (baseline, age 35 / $120k income / shelter-first):** renter still
+ahead ~$1.60M after tax — the RRSP refund arbitrage (contribute at ~43%, withdraw
+at 30%) plus tax-free TFSA growth outweigh the capital-gains drag at these
+assumptions. Under *taxable-only* the renter's lead shrinks to ~$0.74M. The
+result remains highly sensitive to appreciation (gap #6) and income/strategy.
+
+**Tax-layer simplifications worth revisiting:** single province (Ontario);
+brackets/limits ~2024-2026, not indexed forward; assumes TFSA room is fully
+unused at the start and RRSP has *no carried-forward* room (annual only); cap
+gains realized as a lump at term end at the retirement rate; one flat retirement
+rate. Gaps #3–#7 below are still open.
+
+---
+
 ## What the model gets right ✅
 
 The core "buy vs. rent-and-invest-the-difference" framework is sound and
@@ -40,7 +71,7 @@ TFSA/RRSP shelters only a fraction of a portfolio this size. The model applies
 
 ### 2. Principal-residence exemption — **understates buyer** (large)
 A Canadian primary residence is **100% capital-gains-tax-free** on sale (see
-`Notes.txt`: "is primary house taxed — no"). The home's ~$4.3M terminal value
+`prompts.md`: "is primary house taxed — no"). The home's ~$4.3M terminal value
 carries no tax, while the renter's gains do. By taxing neither side, the model
 quietly erases the single biggest tax advantage of buying in Canada.
 
@@ -107,10 +138,9 @@ would likely land near parity at 5% appreciation and favor buying at ~7%.**
 
 ## Recommended fixes, in priority order
 
-1. **Tax layer (highest value).** Capital-gains tax on the renter's taxable
+1. ~~**Tax layer (highest value).** Capital-gains tax on the renter's taxable
    portfolio, with optional TFSA/RRSP sheltering; principal-residence exemption
-   for the owner. This is the difference between a model that flatters renting and
-   one a Canadian could actually trust.
+   for the owner.~~ **DONE 2026-06-26** — see the update note at the top.
 2. **Transaction costs.** Land-transfer tax (Ontario + Toronto) at purchase;
    realtor commission + HST at sale. Wire up the existing unused `closing_costs`
    param.

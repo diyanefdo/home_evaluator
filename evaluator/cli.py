@@ -23,6 +23,7 @@ import sys
 from evaluator import data
 from evaluator import projections
 from evaluator import charts
+from evaluator import tax
 
 
 # --------------------------------------------------------------------------- #
@@ -69,6 +70,11 @@ def build_engine_params(args: argparse.Namespace) -> dict:
         "rent_growth_rate": _override(args.rent_growth, region["rent_growth_rate"]),
         "investment_return_rate": _override(args.investment_return, region["sp500_nominal_cagr"]),
         "currency_symbol": "$",
+        # ---- Tax layer (registered accounts + capital-gains tax) ----
+        "current_age": int(args.age),
+        "annual_income": float(args.income),
+        "account_strategy": str(args.account_strategy),
+        "retirement_marginal_rate": _override(args.retirement_rate, tax.RETIREMENT_MARGINAL_RATE),
     }
     return params
 
@@ -101,6 +107,19 @@ def print_report(params: dict, summary: dict, chart_paths: list[str]) -> None:
     print(f"    Maintenance       : {params['maintenance_pct_of_value'] * 100:.2f}% of value/yr")
     print(f"    Insurance / HOA   : {_money(params['insurance_annual'], sym)}/yr  /  {_money(params['hoa_monthly'], sym)}/mo")
     print(f"    Investment return : {params['investment_return_rate'] * 100:.2f}%/yr (S&P 500)")
+    print()
+    print("  TAX LAYER (registered accounts + capital gains):")
+    strat = params.get("account_strategy", "shelter-first")
+    strat_label = ("TFSA -> RRSP -> taxable" if strat == "shelter-first"
+                   else "taxable account only (no sheltering)")
+    print(f"    Investor / income : age {params.get('current_age')}, "
+          f"{_money(params.get('annual_income', 0), sym)}/yr")
+    print(f"    Account strategy  : {strat}  ({strat_label})")
+    print(f"    Marginal rate     : {tax.marginal_rate(params.get('annual_income', 0)) * 100:.1f}% "
+          f"(refund on RRSP) ; withdrawal/cap-gains @ {params.get('retirement_marginal_rate', 0.30) * 100:.1f}%")
+    print(f"    TFSA room (now)   : {_money(tax.tfsa_cumulative_room(int(params.get('current_age', 35))), sym)}"
+          f"  ;  RRSP room/yr {_money(tax.rrsp_annual_room(params.get('annual_income', 0)), sym)}")
+    print("    Home: principal residence -> capital-gains-tax-FREE on sale")
     print(line)
 
     cy = summary.get("crossover_year")
@@ -109,7 +128,8 @@ def print_report(params: dict, summary: dict, chart_paths: list[str]) -> None:
     else:
         print("  Crossover year      : never (rent stays below ownership cost for the whole term)")
     print()
-    print(f"  {'Net worth':<18}{'Buyer (equity+inv)':>22}{'Renter (portfolio)':>22}")
+    nw_tag = "after tax" if summary.get("after_tax") else "pre-tax"
+    print(f"  {'Net worth (' + nw_tag + ')':<18}{'Buyer (equity+inv)':>22}{'Renter (portfolio)':>22}")
     for yr in (10, 15, 20, T):
         b = summary["buyer_net_worth"].get(yr)
         r = summary["renter_net_worth"].get(yr)
@@ -117,12 +137,21 @@ def print_report(params: dict, summary: dict, chart_paths: list[str]) -> None:
             continue
         print(f"  yr {yr:<15}{_money(b, sym):>22}{_money(r, sym):>22}")
     print()
+    if summary.get("after_tax"):
+        print(f"  Renter portfolio split @ yr {T} : "
+              f"TFSA {_money(summary.get('renter_final_tfsa', 0), sym)}  /  "
+              f"RRSP {_money(summary.get('renter_final_rrsp', 0), sym)}  /  "
+              f"taxable {_money(summary.get('renter_final_taxable', 0), sym)}")
+        print(f"  Tax paid at liquidation       : "
+              f"renter {_money(summary.get('renter_tax_paid', 0), sym)}  /  "
+              f"buyer {_money(summary.get('buyer_tax_paid', 0), sym)} "
+              f"(home exempt)")
     print(f"  Total cost of ownership ({T}yr) : {_money(summary['total_cost_of_ownership'], sym)}")
     print(f"  Total interest paid           : {_money(summary['total_interest_paid'], sym)}")
     print(f"  Total rent paid ({T}yr)         : {_money(summary['total_rent_paid'], sym)}")
     delta = summary["final_buyer_minus_renter"]
     leader = "buyer" if delta >= 0 else "renter"
-    print(f"  Year-{T} net-worth gap          : {_money(abs(delta), sym)} in favour of the {leader}")
+    print(f"  Year-{T} net-worth gap ({nw_tag}) : {_money(abs(delta), sym)} in favour of the {leader}")
     print(line)
     print("  Charts written:")
     for p in chart_paths:
@@ -147,6 +176,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     p.add_argument("--out", default="./charts_output", help="Output directory for chart PNGs")
     p.add_argument("--no-charts", action="store_true", help="Skip chart rendering; print summary only")
+
+    # Tax layer: registered-account sheltering + capital-gains tax.
+    t = p.add_argument_group("tax layer (registered accounts + capital gains)")
+    t.add_argument("--age", type=int, default=35, help="Investor age now (sets TFSA room; default 35)")
+    t.add_argument("--income", type=float, default=120000.0,
+                   help="Gross annual income (sets RRSP room + marginal rate; default 120000)")
+    t.add_argument("--account-strategy", choices=["shelter-first", "taxable-only"],
+                   default="shelter-first",
+                   help="shelter-first: fill TFSA->RRSP then taxable; taxable-only: no sheltering")
+    t.add_argument("--retirement-rate", type=float,
+                   help="Marginal rate on RRSP withdrawals + realized gains at term end (decimal, default 0.30)")
 
     # Optional assumption overrides (default to regional scraper data).
     o = p.add_argument_group("assumption overrides (default: regional)")

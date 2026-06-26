@@ -115,11 +115,11 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
  .field{display:flex;flex-direction:column}
  .field small{color:var(--muted);font-size:.78rem;margin-top:.35rem;font-weight:400}
  /* 16px input font stops iOS Safari from auto-zooming on focus */
- input{width:100%;padding:.7rem .8rem;border:1px solid #cfd9e4;border-radius:10px;
+ input,select{width:100%;padding:.7rem .8rem;border:1px solid #cfd9e4;border-radius:10px;
    font-size:16px;background:#fbfdff;color:var(--ink);
    transition:border-color .15s,box-shadow .15s,background .15s}
- input:hover{border-color:#aebfd2}
- input:focus{outline:none;border-color:var(--brand);
+ input:hover,select:hover{border-color:#aebfd2}
+ input:focus,select:focus{outline:none;border-color:var(--brand);
    box-shadow:0 0 0 3px rgba(31,119,180,.18);background:#fff}
  /* auto-fit collapses the form from 2 columns to 1 on narrow screens */
  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.1rem}
@@ -431,6 +431,24 @@ FORM = PAGE_HEAD + """
         <input id="postal" name="postal" value="M2J 0E8">
         <small>Sets regional rates &amp; rent.</small>
       </div>
+      <div class="field">
+        <label for="age">Your age</label>
+        <input id="age" name="age" value="35" inputmode="numeric">
+        <small>Sets your TFSA contribution room.</small>
+      </div>
+      <div class="field">
+        <label for="income">Annual income ($)</label>
+        <input id="income" name="income" value="120000" inputmode="numeric">
+        <small>Sets RRSP room &amp; your tax rate.</small>
+      </div>
+      <div class="field">
+        <label for="strategy">Investing strategy</label>
+        <select id="strategy" name="strategy">
+          <option value="shelter-first" selected>Use TFSA &amp; RRSP first, then taxable</option>
+          <option value="taxable-only">Taxable account only</option>
+        </select>
+        <small>Where the renter's savings go.</small>
+      </div>
     </div>
     <button type="submit">Evaluate scenario</button>
   </form>
@@ -468,6 +486,10 @@ def evaluate(
     down: str = "20%",
     years: int = 30,
     postal: str = "M2J 0E8",
+    # Tax layer: registered-account sheltering + capital-gains tax.
+    age: int = 35,
+    income: float = 120000.0,
+    strategy: str = "shelter-first",
     # Optional power-user overrides (default to regional data when omitted).
     rate: float | None = None,
     appreciation: float | None = None,
@@ -477,6 +499,7 @@ def evaluate(
     investment_return: float | None = None,
     insurance: float = 1500.0,
     hoa: float = 0.0,
+    retirement_rate: float | None = None,
     _: None = Depends(require_auth),
 ):
     # --- validate inputs up front (don't rely on the CLI's SystemExit) -------
@@ -490,10 +513,17 @@ def evaluate(
         return _error_page(f"Could not read down payment '{down}'. Use e.g. 200000 or 20%.")
     if not (0 < down_amount < price):
         return _error_page("Down payment must be greater than $0 and less than the price.")
+    if not (18 <= age <= 100):
+        return _error_page("Age must be between 18 and 100.")
+    if not (0 <= income <= 100_000_000):
+        return _error_page("Annual income must be $0 or more.")
+    if strategy not in ("shelter-first", "taxable-only"):
+        return _error_page("Investing strategy must be 'shelter-first' or 'taxable-only'.")
 
     # --- run the pipeline (reuse the CLI's validated param mapping) ----------
     args = argparse.Namespace(
         price=price, down=down, years=years, postal=postal,
+        age=age, income=income, account_strategy=strategy, retirement_rate=retirement_rate,
         rate=rate, appreciation=appreciation, rent=rent, rent_growth=rent_growth,
         property_tax_rate=property_tax_rate, investment_return=investment_return,
         insurance=insurance, hoa=hoa, out=None, no_charts=False,
@@ -550,6 +580,10 @@ def evaluate(
     leader = "buyer" if gap >= 0 else "renter"
     verdict_word = "Buying" if leader == "buyer" else "Renting"
     pct = params["down_payment"] / params["purchase_price"] * 100
+    after_tax = summary.get("after_tax")
+    tax_tag = " after tax" if after_tax else ""
+    strat_label = ("TFSA &amp; RRSP first" if summary.get("account_strategy") == "shelter-first"
+                   else "Taxable only")
 
     banner = (
         '<section class="result-banner reveal">'
@@ -560,11 +594,23 @@ def evaluate(
         '<p class="verdict">'
         f'<span class="lead">{verdict_word} comes out ahead</span>'
         f'<span class="v-amount">{sym}{abs(gap):,.0f}</span>'
-        f'<span class="by">net-worth gap by year {years}</span>'
+        f'<span class="by">net-worth gap{tax_tag} by year {years}</span>'
         '</p>'
         '</div>'
         '</section>'
     )
+
+    # Optional after-tax stat tiles (only when the tax layer ran).
+    tax_tiles = ""
+    if after_tax:
+        tax_tiles = (
+            f'<div class="stat"><span class="k">Strategy</span>'
+            f'<span class="v" style="font-size:.95rem">{strat_label}</span></div>'
+            f'<div class="stat"><span class="k">Renter tax at sale</span>'
+            f'<span class="v">{sym}{summary.get("renter_tax_paid", 0):,.0f}</span></div>'
+            f'<div class="stat"><span class="k">Buyer tax at sale</span>'
+            f'<span class="v">{sym}{summary.get("buyer_tax_paid", 0):,.0f} <small>(home exempt)</small></span></div>'
+        )
 
     stats = (
         '<div class="result-summary reveal">'
@@ -576,7 +622,8 @@ def evaluate(
         f'<span class="v">{years} yr <small>@ {params["mortgage_rate"] * 100:.2f}%</small></span></div>'
         f'<div class="stat"><span class="k">Crossover</span>'
         f'<span class="v">{cross}</span></div>'
-        '</div>'
+        + tax_tiles
+        + '</div>'
     )
 
     body = (

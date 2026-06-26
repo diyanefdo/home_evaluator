@@ -17,11 +17,28 @@ sub-agents:
 ## Usage
 
 ```bash
-python3 -m evaluator.cli --price 1000000 --down 200000 --years 30 --postal "M2J 0E8"
+python3 -m evaluator.cli --price 1000000 --down 200000 --years 30 --postal "M2J 0E8" \
+    --age 35 --income 120000 --account-strategy shelter-first
 ```
 
 `--down` accepts a dollar amount (`200000`) or a percentage of price (`20%`).
 Charts are written to `./charts_output` by default (`--out` to change).
+
+### Tax layer (registered accounts + capital gains)
+
+The model is **after-tax**. `--age` sets your cumulative **TFSA** room; `--income`
+sets annual **RRSP** room (18% of income, capped) and your marginal tax rate.
+`--account-strategy` chooses where the invested savings go:
+
+- `shelter-first` (default) — fill TFSA, then RRSP, then a taxable account;
+- `taxable-only` — everything in a taxable account.
+
+At liquidation the renter's portfolio is taxed (TFSA free, RRSP as income,
+taxable on gains); the owner's home is a **principal residence** and is
+capital-gains-tax-free. RRSP refunds are reinvested and withdrawals are taxed at
+a lower retirement rate (`--retirement-rate`, default `0.30`). See
+[`knowledge/METHODOLOGY_GAPS.md`](knowledge/METHODOLOGY_GAPS.md) for assumptions
+and limitations.
 
 ### The five charts
 
@@ -34,9 +51,10 @@ Charts are written to `./charts_output` by default (`--out` to change).
 4. **Homeowner-advantage scenario** — after the crossover year (when rising rent
    exceeds the fixed ownership cost), the homeowner invests
    `MAX(0, rent − ownership cost)`.
-5. **Total net worth — homeowner vs renter** — head-to-head wealth over the term
-   (owner equity + side investments vs renter portfolio), with the lead-change
-   year marked. Both scenarios spend the same each month, so it's apples-to-apples.
+5. **Total net worth — homeowner vs renter (after tax)** — head-to-head wealth
+   over the term (owner equity + side investments vs renter portfolio), with the
+   lead-change year marked. Both scenarios spend the same each month, so it's
+   apples-to-apples. Net worth is shown **after tax** (see the tax layer above).
 
 ### Assumption overrides
 

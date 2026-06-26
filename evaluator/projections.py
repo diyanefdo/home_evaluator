@@ -30,6 +30,12 @@ data-keys into these). Defaults are applied for the optional keys.
     hoa_monthly             : float  -- monthly HOA/condo fee dollars (default 0.0).
     currency_symbol         : str    -- display symbol (default "$"); not used in math.
 
+    -- Tax layer (registered-account sheltering + capital-gains tax) --
+    current_age             : int    -- investor age now; sets TFSA cumulative room (default 35).
+    annual_income           : float  -- gross earned income; sets RRSP room + marginal rate (default 120000).
+    account_strategy        : str    -- "shelter-first" (TFSA->RRSP->taxable) or "taxable-only" (default "shelter-first").
+    retirement_marginal_rate : float -- rate on RRSP withdrawals + realized cap gains at term end (default 0.30).
+
 --------------------------------------------------------------------------
 PUBLIC API
 --------------------------------------------------------------------------
@@ -55,6 +61,7 @@ from __future__ import annotations
 import numpy as np
 
 from evaluator.charts import _detect_crossover
+from evaluator import tax
 
 # --------------------------------------------------------------------------- #
 # Defaults for optional params.
@@ -63,7 +70,114 @@ _DEFAULTS = {
     "insurance_annual": 1500.0,
     "hoa_monthly": 0.0,
     "currency_symbol": "$",
+    "current_age": 35,
+    "annual_income": 120_000.0,
+    "account_strategy": "shelter-first",
+    "retirement_marginal_rate": tax.RETIREMENT_MARGINAL_RATE,
 }
+
+
+def _invest_with_accounts(
+    initial_lump: float,
+    monthly_contrib: np.ndarray,
+    n: int,
+    mrate_inv: float,
+    *,
+    strategy: str,
+    tfsa_room0: float,
+    tfsa_annual: float,
+    rrsp_annual: float,
+    marginal_rate: float,
+) -> dict:
+    """Run a monthly investing waterfall across TFSA -> RRSP -> taxable accounts.
+
+    Both the year-0 lump and each month's contribution are poured into available
+    registered room first (``shelter-first``) or entirely into a taxable account
+    (``taxable-only``). RRSP contributions generate a refund (contribution x
+    marginal_rate) which is reinvested the following January through the same
+    waterfall. Returns annual snapshots (length ``T+1``) of each sub-account plus
+    the taxable-account cost basis (needed for the capital-gains calc later).
+    """
+    shelter = strategy != "taxable-only"
+    tfsa = rrsp = taxable = basis = 0.0
+    tfsa_room = float(tfsa_room0)
+    rrsp_room = float(rrsp_annual)  # current-year room; no carried-forward backlog
+    rrsp_contrib_year = 0.0
+    pending_refund = 0.0
+
+    # Mutable cell so the nested helper can update the running balances.
+    state = {"tfsa": 0.0, "rrsp": 0.0, "taxable": 0.0, "basis": 0.0,
+             "tfsa_room": tfsa_room, "rrsp_room": rrsp_room, "rrsp_year": 0.0}
+
+    def contribute(amount: float) -> None:
+        if amount <= 0:
+            return
+        if shelter:
+            to_t = min(amount, state["tfsa_room"])
+            state["tfsa"] += to_t
+            state["tfsa_room"] -= to_t
+            amount -= to_t
+            to_r = min(amount, state["rrsp_room"])
+            state["rrsp"] += to_r
+            state["rrsp_room"] -= to_r
+            state["rrsp_year"] += to_r
+            amount -= to_r
+        state["taxable"] += amount
+        state["basis"] += amount
+
+    contribute(initial_lump)
+    snap_t = [state["tfsa"]]
+    snap_r = [state["rrsp"]]
+    snap_x = [state["taxable"]]
+    snap_b = [state["basis"]]
+    total = [state["tfsa"] + state["rrsp"] + state["taxable"]]
+
+    for i in range(n):
+        # Growth first (matches the original bal*(1+r)+contrib convention).
+        state["tfsa"] *= 1 + mrate_inv
+        state["rrsp"] *= 1 + mrate_inv
+        state["taxable"] *= 1 + mrate_inv
+        # New calendar year: inject last year's reinvested RRSP refund.
+        if i % 12 == 0 and pending_refund:
+            contribute(pending_refund)
+            pending_refund = 0.0
+        contribute(float(monthly_contrib[i]))
+        # Year end: top up registered room and bank the refund for next January.
+        if (i + 1) % 12 == 0:
+            state["tfsa_room"] += tfsa_annual
+            state["rrsp_room"] += rrsp_annual
+            pending_refund = state["rrsp_year"] * marginal_rate
+            state["rrsp_year"] = 0.0
+            snap_t.append(state["tfsa"])
+            snap_r.append(state["rrsp"])
+            snap_x.append(state["taxable"])
+            snap_b.append(state["basis"])
+            total.append(state["tfsa"] + state["rrsp"] + state["taxable"])
+
+    return {
+        "portfolio": np.array(total),
+        "tfsa": np.array(snap_t),
+        "rrsp": np.array(snap_r),
+        "taxable": np.array(snap_x),
+        "basis": np.array(snap_b),
+    }
+
+
+def _after_tax_series(acct: dict, *, retirement_rate: float, cg_inclusion: float) -> np.ndarray:
+    """After-tax liquidation value of an account waterfall at each year.
+
+    TFSA is tax-free; RRSP is fully taxed as income at ``retirement_rate``;
+    the taxable account pays ``cg_inclusion * retirement_rate`` on its gains
+    (value minus contributed basis).
+    """
+    tfsa = np.asarray(acct["tfsa"], dtype=float)
+    rrsp = np.asarray(acct["rrsp"], dtype=float)
+    taxable = np.asarray(acct["taxable"], dtype=float)
+    basis = np.asarray(acct["basis"], dtype=float)
+    gains = np.maximum(0.0, taxable - basis)
+    cg_tax = gains * cg_inclusion * retirement_rate
+    rrsp_tax = rrsp * retirement_rate
+    return tfsa + (rrsp - rrsp_tax) + (taxable - cg_tax)
 
 
 def _p(params: dict, key: str) -> float:
@@ -168,35 +282,57 @@ def build_projection(params: dict) -> dict:
     cum_property_tax = _cum_annual(m_tax)
     cum_insurance_hoa = _cum_annual(m_other_carry)  # insurance + HOA + maintenance
 
-    # ---- Renter portfolio: down-payment lump + DCA of (cost - rent) --------
-    renter_contrib_monthly = np.maximum(0.0, monthly_ownership_cost - monthly_rent)
-    bal_r = down
-    contrib_r = down
-    renter_portfolio = [down]
-    renter_contributions = [down]
-    for i in range(n):
-        bal_r = bal_r * (1 + mrate_inv) + renter_contrib_monthly[i]
-        contrib_r += renter_contrib_monthly[i]
-        if (i + 1) % 12 == 0:
-            renter_portfolio.append(bal_r)
-            renter_contributions.append(contrib_r)
-    renter_portfolio = np.array(renter_portfolio)
-    renter_contributions = np.array(renter_contributions)
+    # ---- Tax-layer setup: registered-account room + marginal rates ---------
+    age = int(_p(params, "current_age"))
+    income = float(_p(params, "annual_income"))
+    strategy = str(_p(params, "account_strategy"))
+    retirement_rate = float(_p(params, "retirement_marginal_rate"))
+    marg_rate = tax.marginal_rate(income)
+    tfsa_room0 = tax.tfsa_cumulative_room(age)
+    tfsa_annual = tax.tfsa_annual_limit()
+    rrsp_annual = tax.rrsp_annual_room(income)
+    cg_inclusion = tax.CAPITAL_GAINS_INCLUSION
 
-    # ---- Owner-advantage portfolio: DCA of (rent - cost) after crossover ---
+    def _run_accounts(initial_lump, monthly_contrib):
+        return _invest_with_accounts(
+            initial_lump, monthly_contrib, n, mrate_inv,
+            strategy=strategy, tfsa_room0=tfsa_room0, tfsa_annual=tfsa_annual,
+            rrsp_annual=rrsp_annual, marginal_rate=marg_rate,
+        )
+
+    # Both scenarios are the same person in alternate worlds, so each starts with
+    # identical registered room. The renter pours the down-payment lump + monthly
+    # (cost - rent) surplus in; the owner pours only the post-crossover
+    # (rent - cost) surplus in (so more of their room stays available -> more of
+    # the owner's side savings end up sheltered).
+    renter_contrib_monthly = np.maximum(0.0, monthly_ownership_cost - monthly_rent)
     owner_contrib_monthly = np.maximum(0.0, monthly_rent - monthly_ownership_cost)
-    bal_o = 0.0
-    contrib_o = 0.0
-    owner_portfolio = [0.0]
-    owner_contributions = [0.0]
-    for i in range(n):
-        bal_o = bal_o * (1 + mrate_inv) + owner_contrib_monthly[i]
-        contrib_o += owner_contrib_monthly[i]
-        if (i + 1) % 12 == 0:
-            owner_portfolio.append(bal_o)
-            owner_contributions.append(contrib_o)
-    owner_adv_portfolio = np.array(owner_portfolio)
-    owner_adv_contributions = np.array(owner_contributions)
+
+    renter_acct = _run_accounts(down, renter_contrib_monthly)
+    owner_acct = _run_accounts(0.0, owner_contrib_monthly)
+
+    renter_portfolio = renter_acct["portfolio"]          # pre-tax (charts 3/5)
+    owner_adv_portfolio = owner_acct["portfolio"]         # pre-tax (charts 4/5)
+
+    # Cumulative contributions (principal only), incl. reinvested RRSP refunds.
+    renter_contributions = np.concatenate(
+        ([down], down + np.cumsum(renter_contrib_monthly)[11::12])
+    )
+    owner_adv_contributions = np.concatenate(
+        ([0.0], np.cumsum(owner_contrib_monthly)[11::12])
+    )
+
+    # After-tax net worth. The home is a principal residence -> its equity is
+    # capital-gains-tax-FREE, so the buyer keeps full equity; only the side
+    # investments are taxed.
+    renter_after_tax = _after_tax_series(
+        renter_acct, retirement_rate=retirement_rate, cg_inclusion=cg_inclusion
+    )
+    owner_inv_after_tax = _after_tax_series(
+        owner_acct, retirement_rate=retirement_rate, cg_inclusion=cg_inclusion
+    )
+    buyer_net_worth_after_tax = equity + owner_inv_after_tax
+    renter_net_worth_after_tax = renter_after_tax
 
     crossover_month = _detect_crossover(monthly_rent, monthly_ownership_cost)
 
@@ -217,6 +353,21 @@ def build_projection(params: dict) -> dict:
         "owner_adv_portfolio": owner_adv_portfolio,
         "owner_adv_contributions": owner_adv_contributions,
         "crossover_month": crossover_month,
+        # ---- Tax layer (after-tax net worth + account breakdown) ----
+        "buyer_net_worth_after_tax": buyer_net_worth_after_tax,
+        "renter_net_worth_after_tax": renter_net_worth_after_tax,
+        "renter_accounts": renter_acct,
+        "owner_accounts": owner_acct,
+        "tax_meta": {
+            "marginal_rate": marg_rate,
+            "retirement_rate": retirement_rate,
+            "cg_inclusion": cg_inclusion,
+            "account_strategy": strategy,
+            "tfsa_room0": tfsa_room0,
+            "rrsp_annual": rrsp_annual,
+            "current_age": age,
+            "annual_income": income,
+        },
     }
 
 
@@ -244,13 +395,23 @@ def compute_summary(projection: dict, params: dict) -> dict:
     cum_property_tax = np.asarray(projection["cum_property_tax"], dtype=float)
     cum_insurance_hoa = np.asarray(projection["cum_insurance_hoa"], dtype=float)
 
+    # After-tax net worth (the headline comparison): falls back to the pre-tax
+    # equity+portfolio definition if the tax-layer arrays are absent.
+    buyer_at = projection.get("buyer_net_worth_after_tax")
+    renter_at = projection.get("renter_net_worth_after_tax")
+    if buyer_at is None or renter_at is None:
+        buyer_at = equity + owner_adv
+        renter_at = renter
+    buyer_at = np.asarray(buyer_at, dtype=float)
+    renter_at = np.asarray(renter_at, dtype=float)
+
     down_payment = float(params["down_payment"])
 
     def _buyer_nw(y: int) -> float:
-        return float(equity[y] + owner_adv[y])
+        return float(buyer_at[y])
 
     def _renter_nw(y: int) -> float:
-        return float(renter[y])
+        return float(renter_at[y])
 
     milestones = [y for y in (10, 15, 20, T) if 0 <= y <= T]
     milestones = sorted(set(milestones))
@@ -277,6 +438,19 @@ def compute_summary(projection: dict, params: dict) -> dict:
 
     final_buyer_minus_renter = _buyer_nw(T) - _renter_nw(T)
 
+    # Tax drag at term end: pre-tax value minus after-tax value, per scenario.
+    renter_pretax_T = float(renter[T])
+    buyer_pretax_T = float(equity[T] + owner_adv[T])
+    renter_tax_paid = renter_pretax_T - _renter_nw(T)
+    buyer_tax_paid = buyer_pretax_T - _buyer_nw(T)
+
+    tax_meta = projection.get("tax_meta", {})
+    renter_acct = projection.get("renter_accounts", {})
+
+    def _final(arr_key: str) -> float:
+        arr = renter_acct.get(arr_key)
+        return float(np.asarray(arr)[-1]) if arr is not None else 0.0
+
     return {
         "crossover_year": crossover_year,
         "buyer_net_worth": buyer_net_worth,
@@ -285,6 +459,18 @@ def compute_summary(projection: dict, params: dict) -> dict:
         "total_rent_paid": total_rent_paid,
         "total_interest_paid": total_interest_paid,
         "final_buyer_minus_renter": final_buyer_minus_renter,
+        # ---- Tax layer ----
+        "after_tax": ("buyer_net_worth_after_tax" in projection),
+        "renter_tax_paid": renter_tax_paid,
+        "buyer_tax_paid": buyer_tax_paid,
+        "renter_pretax_final": renter_pretax_T,
+        "buyer_pretax_final": buyer_pretax_T,
+        "account_strategy": tax_meta.get("account_strategy"),
+        "marginal_rate": tax_meta.get("marginal_rate"),
+        "retirement_rate": tax_meta.get("retirement_rate"),
+        "renter_final_tfsa": _final("tfsa"),
+        "renter_final_rrsp": _final("rrsp"),
+        "renter_final_taxable": _final("taxable"),
     }
 
 
