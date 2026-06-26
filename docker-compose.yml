@@ -5,6 +5,11 @@ services:
     container_name: home-evaluator
     ports:
       - "8000:8000"          # host:container — see WSL note in knowledge/DOCKER_PRIVATE_DEPLOYMENT.md
+    environment:
+      # Set these in a local .env file (gitignored) to require login on a public link.
+      # Leave EVALUATOR_PASSWORD empty to run open (e.g. local-only).
+      - EVALUATOR_USER=${EVALUATOR_USER:-admin}
+      - EVALUATOR_PASSWORD=${EVALUATOR_PASSWORD:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]

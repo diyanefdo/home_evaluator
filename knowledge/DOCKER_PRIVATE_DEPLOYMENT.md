@@ -252,11 +252,46 @@ ngrok http 8000 --basic-auth "me:somepassword"
 Prints a public `https://....ngrok-free.app` URL; `--basic-auth` keeps randoms
 out. Fine for ad-hoc use; less "private" than A/B.
 
-| Option | Private by default | Stable URL | Extra needs | Best for |
-|--------|--------------------|-----------|-------------|----------|
-| Tailscale | ✅ tailnet-only | ✅ MagicDNS | install on both devices | personal always-on access |
-| Cloudflare Tunnel | ✅ with Access policy | ✅ your domain | a domain on Cloudflare | sharing with specific people |
-| ngrok | ⚠️ only as strong as basic-auth | ❌ rotates (free) | account | quick one-off demo |
+### Option D — Tailscale Funnel (permanent PUBLIC URL, any device, no domain)
+
+This is the **public** counterpart of Serve: it publishes your local service to
+the **whole internet** at a stable `https://<your-pc>.<tailnet>.ts.net` URL that
+any device can open — no domain required, free, and the URL does not change.
+
+1. Install Tailscale on the PC and sign in (https://tailscale.com/download).
+2. Enable Funnel for your tailnet if prompted (the command prints an admin link
+   the first time). Funnel requires HTTPS certs + the `funnel` node attribute.
+3. Publish the container's port:
+   ```bash
+   tailscale funnel --bg 8000
+   tailscale funnel status        # shows your public https://<pc>.<tailnet>.ts.net URL
+   ```
+4. Because this is fully public, **turn on the app's basic-auth** (see §3.5).
+
+> Stop publishing with `tailscale funnel --https=443 off` (or `tailscale funnel reset`).
+
+### 3.5 App-level basic-auth (use whenever the link is public)
+
+`webapp.py` enforces HTTP basic-auth **only when `EVALUATOR_PASSWORD` is set**
+(so local runs stay open). Set credentials via a gitignored `.env` file that
+`docker compose` reads automatically:
+
+```bash
+cp .env.example .env
+# edit .env -> EVALUATOR_USER=you  EVALUATOR_PASSWORD=a-strong-password
+docker compose up -d            # picks up .env; browsers now prompt for login
+```
+
+`/healthz` stays open so the container healthcheck keeps working.
+
+| Option | Public | Permanent URL | Domain needed | Built-in access control |
+|--------|--------|---------------|---------------|-------------------------|
+| Tailscale Serve | ❌ tailnet-only | ✅ | no | device identity |
+| Tailscale Funnel | ✅ internet | ✅ `*.ts.net` | no | **app basic-auth** (§3.5) |
+| Cloudflare named tunnel | ✅ internet | ✅ your domain | yes | Cloudflare Access (login) |
+| ngrok (free) | ✅ internet | ❌ rotates | no | `--basic-auth` / app auth |
+
+For a **permanent public link with no domain**, use **Funnel + basic-auth**.
 
 ---
 
@@ -266,27 +301,30 @@ out. Fine for ad-hoc use; less "private" than A/B.
   endpoint still runs compute on every request — don't leave it open.
 - Keep `--host 0.0.0.0` **inside the container only**; rely on the tunnel for
   exposure. Do **not** port-forward 8000 on your home router.
-- Prefer a layer that authenticates: Tailscale (device identity), Cloudflare
-  Access (login), or at least ngrok `--basic-auth`.
-- If you ever expose it more widely, add rate-limiting and input bounds (cap
-  `years`, validate `price`/`down`) to the FastAPI handler.
+- On any **public** link, set `EVALUATOR_PASSWORD` (via `.env`) so the app
+  requires login — or use device/identity auth (Tailscale Serve, Cloudflare
+  Access). Never put a public URL up with auth disabled.
+- Input bounds are already enforced in the handler (`MAX_YEARS`, `MAX_PRICE`,
+  down-payment validation). For heavy public exposure, add rate-limiting too.
 
 ---
 
 ## 5. Quick reference
 
 ```bash
-# build + run
+# build + run (set credentials in .env first for a public link)
+cp .env.example .env       # then edit EVALUATOR_PASSWORD
 docker compose up -d --build
 # verify
 curl http://localhost:8000/healthz
-# private HTTPS link (Tailscale)
+# permanent PRIVATE HTTPS link (tailnet-only)
 tailscale serve --bg 8000 && tailscale serve status
+# permanent PUBLIC HTTPS link (any device) — pair with basic-auth
+tailscale funnel --bg 8000 && tailscale funnel status
 # logs / stop
 docker compose logs -f
 docker compose down
 ```
 
-Files this guide adds to the repo (not yet created — ask if you want them
-scaffolded): `webapp.py`, `requirements.txt`, `Dockerfile`, `.dockerignore`,
-`docker-compose.yml`.
+These files are scaffolded in the repo: `webapp.py`, `requirements.txt`,
+`Dockerfile`, `.dockerignore`, `docker-compose.yml`, `.env.example`.

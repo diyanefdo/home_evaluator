@@ -5,6 +5,7 @@ _chart_preview
 _*_test
 __pycache__
 *.pyc
+.env
 .claude
 knowledge
 notes.txt

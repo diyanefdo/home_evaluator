@@ -9,3 +9,6 @@ venv/
 charts_output/
 _chart_preview/
 _*_test/
+
+# Local secrets (basic-auth credentials for the web app)
+.env

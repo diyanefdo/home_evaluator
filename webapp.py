@@ -16,15 +16,42 @@ from __future__ import annotations
 import argparse
 import base64
 import html
+import os
+import secrets
 import shutil
 import tempfile
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.responses import HTMLResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from evaluator import cli, projections, charts
 
 app = FastAPI(title="Canadian Buy-vs-Rent Home Evaluator")
+
+# --------------------------------------------------------------------------- #
+# Optional HTTP basic-auth (recommended when exposed on a public link).
+# Enabled only when EVALUATOR_PASSWORD is set, so local/dev runs stay open.
+# Username defaults to "admin"; override with EVALUATOR_USER.
+# --------------------------------------------------------------------------- #
+_AUTH_USER = os.environ.get("EVALUATOR_USER", "admin")
+_AUTH_PASS = os.environ.get("EVALUATOR_PASSWORD")  # None => auth disabled
+_security = HTTPBasic(auto_error=False)
+
+
+def require_auth(credentials: HTTPBasicCredentials | None = Depends(_security)) -> None:
+    """Enforce basic-auth when EVALUATOR_PASSWORD is configured; else no-op."""
+    if not _AUTH_PASS:
+        return
+    ok = credentials is not None and secrets.compare_digest(
+        credentials.username, _AUTH_USER
+    ) and secrets.compare_digest(credentials.password, _AUTH_PASS)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
 
 # Sanity bounds so the public-facing handler can't be handed absurd work.
 MAX_YEARS = 50
@@ -78,7 +105,7 @@ def _error_page(message: str) -> HTMLResponse:
 
 
 @app.get("/", response_class=HTMLResponse)
-def home() -> str:
+def home(_: None = Depends(require_auth)) -> str:
     return FORM
 
 
@@ -102,6 +129,7 @@ def evaluate(
     investment_return: float | None = None,
     insurance: float = 1500.0,
     hoa: float = 0.0,
+    _: None = Depends(require_auth),
 ):
     # --- validate inputs up front (don't rely on the CLI's SystemExit) -------
     if not (0 < price <= MAX_PRICE):
