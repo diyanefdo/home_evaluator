@@ -1,0 +1,12 @@
+.git
+.gitignore
+charts_output
+_chart_preview
+_*_test
+__pycache__
+*.pyc
+.claude
+knowledge
+notes.txt
+Notes.txt
+README.md

@@ -1,0 +1,13 @@
+services:
+  home-evaluator:
+    build: .
+    image: home-evaluator
+    container_name: home-evaluator
+    ports:
+      - "8000:8000"          # host:container — see WSL note in knowledge/DOCKER_PRIVATE_DEPLOYMENT.md
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

@@ -48,6 +48,25 @@ Postal codes in North York (FSAs `M2H/M2J/M2K/M2N`) use Toronto-specific data;
 all others fall back to Canada-wide defaults. Add more regions in
 `evaluator/data.py`.
 
+## Run as a web service (Docker)
+
+A thin FastAPI layer (`webapp.py`) serves the same analysis as a web page with
+all five charts embedded inline.
+
+```bash
+# local
+pip install -r requirements.txt
+uvicorn webapp:app --host 0.0.0.0 --port 8000      # open http://localhost:8000
+
+# containerized
+docker compose up -d --build                       # open http://localhost:8000
+```
+
+Endpoints: `/` (form), `/evaluate?price=1000000&down=200000&years=30&postal=M2J+0E8`,
+`/healthz`. To reach it from other devices over a **private link** (Tailscale,
+Cloudflare Tunnel, or ngrok) — including WSL2 notes — see
+[`knowledge/DOCKER_PRIVATE_DEPLOYMENT.md`](knowledge/DOCKER_PRIVATE_DEPLOYMENT.md).
+
 ## Data vintage & caveats
 
 Regional figures were gathered 2026-06-25 (sources cited in `evaluator/data.py`).
