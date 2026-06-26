@@ -8,6 +8,5 @@ __pycache__
 .env
 .claude
 knowledge
-notes.txt
-Notes.txt
+prompts.txt
 README.md
