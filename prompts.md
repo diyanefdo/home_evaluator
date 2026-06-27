@@ -222,3 +222,25 @@ yes work on that first
 ## 2026-06-26 22:44:00
 
 commit and push
+
+## 2026-06-26 22:45:44
+
+do i need #5. this is for until the mortgage ends. and after the mortgage period a renter can choose to buy a house too
+
+## 2026-06-26 22:48:34
+
+yes. makr it as out-of-scope and then can you get to implementing the Sliders / what-if in Theme 3
+
+## 2026-06-26 22:58:24
+
+do ur changes cover this: Phase 4 — Polish & engagement
+
+Interactive charts + what-if sliders. (part of ROADMAP.md)
+
+## 2026-06-26 22:59:46
+
+go ahead and implementt intereacive charts next
+
+## 2026-06-26 23:36:33
+
+commit and push
