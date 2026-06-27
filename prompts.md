@@ -206,3 +206,11 @@ can you now tackle the selling costs and purchase transaction costs part for our
 ## 2026-06-26 18:47:43
 
 yes
+
+## 2026-06-26 18:50:57
+
+can you create a plan or ideas of what can be improved in this app. this includes new features. some way for maybe keep track of users and store their stuff in terms of their tool usage. more ideas could be like having access to check nearby homes in the area or rental homes. think of some stuff and document them in a new file
+
+## 2026-06-26 22:38:48
+
+yes push this
