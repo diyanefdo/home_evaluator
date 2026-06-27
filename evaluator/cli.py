@@ -206,6 +206,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     p.add_argument("--out", default="./charts_output", help="Output directory for chart PNGs")
     p.add_argument("--no-charts", action="store_true", help="Skip chart rendering; print summary only")
+    p.add_argument("--no-sensitivity", action="store_true",
+                   help="Skip the appreciation x return sensitivity heatmap (Chart 6)")
 
     # Tax layer: registered-account sheltering + capital-gains tax.
     t = p.add_argument_group("tax layer (registered accounts + capital gains)")
@@ -251,6 +253,8 @@ def main(argv: list[str] | None = None) -> int:
 
     chart_paths: list[str] = []
     if not args.no_charts:
+        if not getattr(args, "no_sensitivity", False):
+            projection["sensitivity"] = projections.build_sensitivity(params)
         chart_paths = charts.generate_charts(projection, params, args.out)
 
     print_report(params, summary, chart_paths)

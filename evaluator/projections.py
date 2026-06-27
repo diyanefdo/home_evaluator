@@ -512,6 +512,48 @@ def compute_summary(projection: dict, params: dict) -> dict:
     }
 
 
+def build_sensitivity(
+    params: dict,
+    appreciation_values: list | None = None,
+    return_values: list | None = None,
+) -> dict:
+    """Re-run the model across a grid of home-appreciation x investment-return.
+
+    The buy-vs-rent result is dominated by these two assumptions (the owner runs
+    ~5:1 leverage on an appreciating asset), so a point estimate is fragile. This
+    returns a 2-D grid of the year-T **after-tax** net-worth gap (buyer - renter;
+    positive = buying wins) so the sensitivity is visible at a glance.
+
+    All other params (price, down, tax, transaction costs, ...) are held at the
+    caller's values; only appreciation and investment return are swept.
+    """
+    appr_vals = list(appreciation_values) if appreciation_values is not None else [
+        0.03, 0.04, 0.05, 0.06, 0.07, 0.08
+    ]
+    ret_vals = list(return_values) if return_values is not None else [
+        0.06, 0.07, 0.08, 0.09, 0.10, 0.11
+    ]
+
+    gap_grid = np.zeros((len(appr_vals), len(ret_vals)), dtype=float)
+    for i, a in enumerate(appr_vals):
+        for j, r in enumerate(ret_vals):
+            p = dict(params)
+            p["appreciation_rate"] = a
+            p["investment_return_rate"] = r
+            proj = build_projection(p)
+            summ = compute_summary(proj, p)
+            gap_grid[i, j] = summ["final_buyer_minus_renter"]
+
+    return {
+        "appreciation_values": np.array(appr_vals, dtype=float),
+        "return_values": np.array(ret_vals, dtype=float),
+        "gap_grid": gap_grid,  # buyer - renter (after tax); >0 => buying wins
+        "base_appreciation": float(params.get("appreciation_rate", float("nan"))),
+        "base_return": float(params.get("investment_return_rate", float("nan"))),
+        "after_tax": True,  # the tax layer always runs in build_projection
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Standalone smoke test against the real M2J / North York scenario.
 # Run from the project root:  python -m evaluator.projections

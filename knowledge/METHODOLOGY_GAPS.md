@@ -47,10 +47,23 @@ through the model (toggle with `--no-transaction-costs`):
 **New result (baseline, age 35 / $120k income / shelter-first, with tax +
 transaction costs):** renter ahead ~**$2.38M** after tax (vs ~$1.60M with tax
 only) — transaction costs push toward renting, as expected. The result is still
-dominated by the appreciation assumption (gap #6).
+dominated by the appreciation assumption (now made visible — see below).
 
-Remaining open items: gaps **#5 (terminal value / imputed rent)**, **#6
-(sensitivity grid)**, and **#7 (minor polish)**.
+## ✅ UPDATE 2026-06-26 — Sensitivity heatmap implemented (gap #6 addressed)
+
+`projections.build_sensitivity()` re-runs the full after-tax model across a grid
+of **home appreciation (3-8%) × investment return (6-11%)** and renders it as
+**Chart 6**: a green/red heatmap of the year-T net-worth gap, with the scenario's
+own cell outlined. (Toggle with `--no-sensitivity`.)
+
+It makes the fragility unmistakable: at the baseline, **19 of 36 cells favor
+buying** — the verdict flips with a ~1-2 point shift in either assumption. The
+baseline lands at 5% appreciation / 10% return (−$2.38M, renting), but at 7%
+appreciation / 8% return buying wins by ~$2.65M. The point estimate should never
+be read without this chart.
+
+Remaining open items: gaps **#5 (terminal value / imputed rent)** and **#7
+(minor polish)**.
 
 ---
 
@@ -160,8 +173,9 @@ would likely land near parity at 5% appreciation and favor buying at ~7%.**
 2. ~~**Transaction costs.** Land-transfer tax (Ontario + Toronto) at purchase;
    realtor commission + HST at sale.~~ **DONE 2026-06-26** — see the second
    update note at the top.
-3. **Sensitivity output.** An appreciation × return grid so the result's
-   fragility is obvious at a glance.
+3. ~~**Sensitivity output.** An appreciation × return grid so the result's
+   fragility is obvious at a glance.~~ **DONE 2026-06-26** — Chart 6, see the
+   third update note at the top.
 4. **Terminal-value handling.** Extend a few years past payoff, or annotate the
    owner's post-payoff housing-cost advantage.
 5. **Lower-priority polish.** Inflation-adjusted (real) view toggle; grow

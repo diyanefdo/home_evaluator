@@ -82,7 +82,7 @@ aggressively and attribute sources.
 
 | Idea | What | Effort | Impact |
 |------|------|--------|--------|
-| **Sensitivity grid** (gap #6) | An appreciation × investment-return heatmap/table so the result's fragility is obvious at a glance (the single most important caveat today). | M | High |
+| ~~**Sensitivity grid** (gap #6)~~ ✅ **DONE** | Chart 6: appreciation × investment-return heatmap with the scenario's cell outlined (`build_sensitivity()` + `_chart_sensitivity`). | M | High |
 | **Terminal value / imputed rent** (gap #5) | Value the owner's near-rent-free years after payoff — extend a few years past the term or add a housing-cost differential. | M | Medium |
 | **Monte Carlo** | Instead of point estimates, simulate distributions of returns/appreciation → "buying wins in X% of scenarios" with confidence bands. | L | High (credibility) |
 | **Variable mortgage rates / renewals** | Model 5-yr renewals at projected rates instead of one fixed rate for 30 years (more realistic for Canada). | M | Medium |
@@ -125,7 +125,7 @@ aggressively and attribute sources.
 A pragmatic order that front-loads value and respects dependencies:
 
 **Phase 1 — Finish the model + de-risk (low effort, high trust)**
-- Sensitivity grid (#6) and terminal value (#5) — closes the methodology gaps.
+- ✅ Sensitivity grid (#6) — done (Chart 6). Terminal value (#5) still to do.
 - Live mortgage rates + CMHC insurance for <20% down.
 - Automated tests + CI for the engine.
 - Methodology/transparency page + clearer disclaimers.

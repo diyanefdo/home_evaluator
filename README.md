@@ -1,8 +1,9 @@
 # Canadian Buy-vs-Rent Home Evaluator
 
-A reusable command-line tool that turns **four inputs** — house price, down
-payment, mortgage term, and a Canadian postal code — into **five financial
-charts** plus an executive summary comparing buying vs. renting-and-investing.
+A reusable command-line tool that turns a handful of inputs — house price, down
+payment, mortgage term, Canadian postal code, plus age/income/strategy for the
+tax layer — into **six financial charts** plus an executive summary comparing
+buying vs. renting-and-investing.
 
 The work is split across three layers, each built from one of the project's
 sub-agents:
@@ -45,7 +46,7 @@ plus legal/inspection, and **realtor commission + HST** at sale (~5% + 13%). Use
 See [`knowledge/METHODOLOGY_GAPS.md`](knowledge/METHODOLOGY_GAPS.md) for
 assumptions and limitations.
 
-### The five charts
+### The six charts
 
 1. **Home value, mortgage balance & equity** over the term, with loan-paid-off
    milestone markers.
@@ -60,6 +61,11 @@ assumptions and limitations.
    over the term (owner equity + side investments vs renter portfolio), with the
    lead-change year marked. Both scenarios spend the same each month, so it's
    apples-to-apples. Net worth is shown **after tax** (see the tax layer above).
+6. **Sensitivity heatmap** — the year-T net-worth gap across a grid of home
+   appreciation × investment return (green = buying wins, red = renting wins),
+   with your scenario's cell outlined. The result hinges on these two
+   assumptions, so this shows how fragile (or robust) the verdict is.
+   Disable with `--no-sensitivity`.
 
 ### Assumption overrides
 
@@ -74,7 +80,7 @@ all others fall back to Canada-wide defaults. Add more regions in
 ## Run as a web service (Docker)
 
 A thin FastAPI layer (`webapp.py`) serves the same analysis as a web page with
-all five charts embedded inline.
+all six charts embedded inline.
 
 ```bash
 # local

@@ -558,10 +558,13 @@ def evaluate(
          "Buying and investing any monthly surplus alongside the home."),
         ("Net worth: buy vs rent",
          "Total projected wealth under each path, side by side."),
+        ("Sensitivity: who wins",
+         "How the result shifts across home-appreciation and investment-return assumptions."),
     ]
 
     out_dir = tempfile.mkdtemp(prefix="charts_")
     try:
+        projection["sensitivity"] = projections.build_sensitivity(params)
         paths = charts.generate_charts(projection, params, out_dir)
         cards = ""
         for i, p in enumerate(paths):

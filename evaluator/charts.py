@@ -576,6 +576,77 @@ def _chart_networth_comparison(projection, params, out_dir, symbol) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Chart 6: sensitivity heatmap (appreciation x investment return)
+# --------------------------------------------------------------------------- #
+def _chart_sensitivity(sens: dict, params: dict, out_dir: str, symbol: str) -> str:
+    """Heatmap of the year-T after-tax net-worth gap across appreciation x return.
+
+    Green = buying wins (gap > 0), red = renting wins (gap < 0). Each cell is
+    annotated with the dollar gap; the cell nearest the scenario's own
+    assumptions is outlined.
+    """
+    from matplotlib.colors import TwoSlopeNorm
+    from matplotlib.patches import Rectangle
+
+    appr = np.asarray(sens["appreciation_values"], dtype=float)
+    ret = np.asarray(sens["return_values"], dtype=float)
+    grid = np.asarray(sens["gap_grid"], dtype=float)  # shape (len(appr), len(ret))
+
+    fig, ax = plt.subplots(figsize=(11, 6.5))
+
+    # Diverging colour scale centred at 0 (the break-even line).
+    span = float(np.max(np.abs(grid))) or 1.0
+    norm = TwoSlopeNorm(vmin=-span, vcenter=0.0, vmax=span)
+    im = ax.imshow(grid, cmap="RdYlGn", norm=norm, aspect="auto", origin="lower")
+
+    ax.set_xticks(range(len(ret)))
+    ax.set_xticklabels([f"{r * 100:.0f}%" for r in ret])
+    ax.set_yticks(range(len(appr)))
+    ax.set_yticklabels([f"{a * 100:.0f}%" for a in appr])
+    ax.set_xlabel("Investment return (S&P 500, annual)")
+    ax.set_ylabel("Home appreciation (annual)")
+
+    # Annotate each cell with the signed gap; +/- prefix makes direction obvious.
+    for i in range(len(appr)):
+        for j in range(len(ret)):
+            val = grid[i, j]
+            sign = "+" if val >= 0 else "-"
+            ax.text(j, i, f"{sign}{_money_str(abs(val), symbol)}",
+                    ha="center", va="center", fontsize=8,
+                    color="#1a1a1a", fontweight="bold")
+
+    # Outline the cell closest to the scenario's own assumptions.
+    base_a = sens.get("base_appreciation")
+    base_r = sens.get("base_return")
+    if base_a is not None and base_r is not None and not np.isnan(base_a):
+        bi = int(np.argmin(np.abs(appr - base_a)))
+        bj = int(np.argmin(np.abs(ret - base_r)))
+        ax.add_patch(Rectangle((bj - 0.5, bi - 0.5), 1, 1, fill=False,
+                               edgecolor="#111111", lw=2.4, zorder=5))
+        ax.text(bj, bi - 0.42, "your scenario", ha="center", va="bottom",
+                fontsize=7.5, color="#111111", fontstyle="italic")
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label(f"Year-{int(params['term_years'])} net-worth gap "
+                   "(buyer − renter, after tax)")
+
+    ax.set_title("Chart 6 — Sensitivity: who wins, by appreciation × return",
+                 fontsize=13, fontweight="bold")
+    fig.text(
+        0.012, 0.012,
+        "Green = buying ends ahead, red = renting ends ahead. The result hinges on "
+        "the gap between home appreciation and investment return; small shifts can flip it.",
+        fontsize=7.5, color="#555555",
+    )
+
+    path = os.path.join(out_dir, "chart6_sensitivity.png")
+    fig.tight_layout(rect=(0, 0.03, 1, 1))
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+    return path
+
+
+# --------------------------------------------------------------------------- #
 # Public entry point
 # --------------------------------------------------------------------------- #
 def generate_charts(projection: dict, params: dict, out_dir: str) -> list[str]:
@@ -609,6 +680,11 @@ def generate_charts(projection: dict, params: dict, out_dir: str) -> list[str]:
         _chart_owner_advantage(projection, params, out_dir, symbol),
         _chart_networth_comparison(projection, params, out_dir, symbol),
     ]
+    # Optional Chart 6: sensitivity heatmap, rendered only when the caller has
+    # attached a sensitivity grid (projection["sensitivity"]).
+    sens = projection.get("sensitivity")
+    if sens:
+        paths.append(_chart_sensitivity(sens, params, out_dir, symbol))
     return paths
 
 
