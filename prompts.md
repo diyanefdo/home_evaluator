@@ -252,3 +252,15 @@ in the roadmap file can you also find ways to improve this webtools that would b
 ## 2026-06-26 23:48:16
 
 yes commit and push
+
+## 2026-06-27 10:44:47
+
+in the point "Data: hard-coded regional assumptions for Toronto/North York FSAs + national fallbacks (no live data)." in ROADMAP.md. can you extend coverage to all of ontario. is it possible to have live data ?
+
+## 2026-06-27 10:48:18
+
+yes implement it for ontario with live data
+
+## 2026-06-27 10:56:04
+
+commit and push
