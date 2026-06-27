@@ -120,6 +120,100 @@ aggressively and attribute sources.
 
 ---
 
+## Theme 6 — Monetization & growth
+
+> How this becomes something people *pay* for. The tool is already a credible,
+> Canada-specific buy-vs-rent engine — the monetizable gap is turning a one-shot
+> calculator into (a) a personalized, authoritative **product** for consumers and
+> (b) a **lead-gen / white-label tool** for real-estate and finance pros, who have
+> far higher willingness to pay. Most items here build on Themes 1–5 (accounts,
+> live data, reports), so monetization is mostly *packaging* existing roadmap work.
+
+### Who would pay (and why)
+
+| Segment | Why they pay | Willingness |
+|---------|--------------|-------------|
+| **Home buyers / renters** | A personalized, trustworthy "should I buy?" report for the biggest financial decision of their life | Low individually, high volume → freemium / one-time report |
+| **Realtors / mortgage brokers** | Client-education + **lead capture**, white-labeled with their branding; closes deals faster | **High** (B2B SaaS) |
+| **Financial advisors / planners** | A client-facing, Canada-accurate analysis they can hand over | Medium–High |
+| **Banks / lenders / portals** | Embed the calculator on their site (engagement, lead funnel) | High (licensing) |
+| **Fintech developers** | Programmatic access to the calculation engine | Medium (API) |
+
+### Revenue models (rank by fit)
+
+1. **Freemium consumer (B2C).** Free single scenario + interactive charts; **paid**
+   unlocks the premium hooks below. Convert via a one-time **"full report" purchase**
+   (~$5–15) or a low monthly **Plus** plan. Needs accounts + Stripe (Theme 1).
+2. **Pro / white-label SaaS (B2B) — highest revenue per user.** Monthly plan for
+   agents/brokers/advisors: their logo + colors, a shareable branded link/embed,
+   **lead capture** (prospect enters scenario → pro gets the contact), unlimited
+   scenarios, all regions. ~$30–99/mo.
+3. **Affiliate / referral (often the biggest line for these tools).** Surface
+   **live mortgage rates** (Theme 2) and "get pre-approved" / "find an agent" CTAs;
+   earn per qualified click/lead from lenders, brokers, and brokerages. Pure
+   upside, no user friction — but disclose clearly and keep the analysis unbiased.
+4. **Embed / licensing.** License the widget to a brokerage, bank, or listing
+   portal for a flat annual fee (their branding, their domain).
+5. **API access.** Charge fintechs for the projection/tax engine (the `evaluator`
+   package is already cleanly separable — see "keep the engine pure").
+6. **Lead generation marketplace.** With explicit consent (CASL), sell
+   qualified, intent-rich leads ("buying in M2J around $1M") to vetted local
+   agents/brokers. Lucrative but the most privacy-sensitive — handle carefully.
+
+### Premium feature hooks (what sits behind the paywall)
+
+These make the free tier genuinely useful while giving real reasons to upgrade —
+most are existing roadmap items, now framed as paid value:
+
+- **Branded PDF / email report** (Theme 4) — the natural one-time purchase; also
+  the pro deliverable. "Download your full report."
+- **Save, compare & track scenarios** (Theme 1) — buy-now vs wait, two
+  neighbourhoods, 20% vs 35% down, side by side.
+- **Address-level analysis** (Theme 2) — real comps, comparable rents, auto-filled
+  price/tax for a specific listing. High perceived value.
+- **All regions / provinces** — free tier limited to a few FSAs; paid unlocks
+  nationwide with correct local LTT/tax rules.
+- **Confidence & risk** — Monte Carlo ranges (Theme 3) + the sensitivity grid as
+  "how robust is this verdict?" — sounds authoritative, justifies payment.
+- **Affordability & mortgage stress test** (new) — max purchase price, B-20 stress
+  test, CMHC premium, pre-approval estimate. Strong buyer intent → great for
+  affiliate/lead tie-ins.
+- **Alerts** — email when rates move or the verdict flips for a saved scenario
+  (recurring engagement → retention).
+- **White-label + lead capture** (pro tier).
+
+### Pricing sketch (starting point, validate later)
+
+| Tier | Price | For | Includes |
+|------|-------|-----|----------|
+| **Free** | $0 | Everyone | 1 scenario, interactive charts, what-if sliders, 1 region |
+| **Plus** | ~$7/mo or ~$12 one-time report | Serious buyers | Save/compare, branded PDF, all regions, Monte Carlo, address autofill, alerts |
+| **Pro** | ~$39–99/mo | Agents, brokers, advisors | White-label, shareable branded link/embed, lead capture, unlimited, priority |
+| **API / Embed** | Custom | Fintech, portals, banks | Engine API or licensed widget |
+
+### What's required to enable monetization (foundations)
+
+- **Accounts + billing:** Theme 1 accounts + **Stripe** (subscriptions + one-time);
+  entitlement checks gating premium features. A feature-flag/plan layer.
+- **Trust & compliance (table stakes once money changes hands):** prominent
+  **"informational, not financial advice"** framing, Terms of Service + privacy
+  policy, **PIPEDA** (data) and **CASL** (email/leads) compliance, transparent
+  affiliate disclosure, and clear sourcing of every assumption (the
+  methodology/transparency page from Theme 5).
+- **Conversion surface:** a clean free→paid upgrade flow, a landing page that sells
+  the value, and analytics on where users drop off (Theme 1 analytics).
+
+### Highest-ROI sequence to first revenue
+
+1. **Branded PDF report behind a one-time charge** — smallest lovable paid thing;
+   needs accounts + Stripe + the report feature only.
+2. **Affiliate mortgage-rate / "find a pro" CTAs** — revenue with no paywall and
+   minimal build; pairs with live rates.
+3. **Pro white-label + lead capture** — the high-value B2B tier once accounts and
+   branding exist.
+
+---
+
 ## Suggested phasing
 
 A pragmatic order that front-loads value and respects dependencies:
@@ -146,6 +240,15 @@ A pragmatic order that front-loads value and respects dependencies:
 - PDF/email reports, PWA, bilingual.
 - Monte Carlo simulation.
 
+**Phase 5 — Monetize (see Theme 6)**
+- Accounts + Stripe; branded PDF report as the first paid unlock.
+- Affiliate mortgage-rate / "find a pro" CTAs (revenue with no paywall).
+- Pro white-label + lead capture tier for agents/brokers/advisors.
+- ToS, privacy policy, affiliate disclosure, PIPEDA/CASL compliance.
+
+> Note: Phase 5 mostly *packages* Phases 1–4 (accounts, live data, reports) into
+> paid tiers — so building those well is the real groundwork for revenue.
+
 ---
 
 ## Cross-cutting concerns (apply to everything above)
@@ -158,3 +261,6 @@ A pragmatic order that front-loads value and respects dependencies:
   to refresh sources (the scraper agent can own this).
 - **Keep the engine pure:** the `evaluator` package should stay UI- and
   storage-agnostic so the CLI, web, future mobile, and any API all reuse it.
+- **Monetization trust:** charging money raises the bar — unbiased analysis even
+  with affiliate links, honest disclaimers, transparent assumptions/sourcing, and
+  no dark patterns. Credibility is the product; protect it (see Theme 6).
