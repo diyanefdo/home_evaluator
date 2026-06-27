@@ -62,8 +62,8 @@ baseline lands at 5% appreciation / 10% return (−$2.38M, renting), but at 7%
 appreciation / 8% return buying wins by ~$2.65M. The point estimate should never
 be read without this chart.
 
-Remaining open items: gaps **#5 (terminal value / imputed rent)** and **#7
-(minor polish)**.
+Remaining open items: gap **#7 (minor polish)**. (Gap #5 is intentionally
+out of scope — see below.)
 
 ---
 
@@ -116,11 +116,20 @@ Toronto levies **both** Ontario and municipal land-transfer tax ≈ **~$33k** on
 $1M home, plus legal/inspection fees (~$2–3k). First-time-buyer rebates may
 offset part. Not modeled. (A `closing_costs` param is referenced but unused.)
 
-### 5. Terminal asymmetry / imputed rent — **understates buyer** (medium)
-At year 30 the owner lives nearly rent-free (~$50k/yr tax + maintenance) while the
-renter keeps paying ~$10k/mo and rising. The year-30 net-worth **snapshot** does
-not value the owner's much lower future housing cost. A fairer comparison extends
-a few years past payoff or adds a terminal housing-cost differential.
+### 5. Terminal asymmetry / imputed rent — **OUT OF SCOPE (decided 2026-06-26)**
+~~At year 30 the owner lives nearly rent-free while the renter keeps paying rent,
+and the year-30 snapshot doesn't value the owner's lower future housing cost.~~
+
+**Decision: not modelling this — intentionally out of scope.** The tool's horizon
+*is* the mortgage term, and the year-T net-worth snapshot already counts both
+assets at market value (the home AND the portfolio), so the balance sheet is
+complete at that instant. The "owner lives rent-free afterward" concern is
+neutralized by the renter's option to **buy a house at year T** with their (now
+larger) portfolio — leaving them in the same housing position with cash to spare.
+Extending past the horizon would only add assumptions (extra years, post-term
+behavior, future prices/rates) and more fragility, not clarity. The model is also
+already slightly conservative toward the owner (it nets selling costs off equity
+as if they liquidate at year T).
 
 ### 6. Headline is fragile to the appreciation assumption — **sensitivity** (high)
 The owner controls a $1M appreciating asset on $200k down — **5:1 leverage** — so
@@ -176,7 +185,9 @@ would likely land near parity at 5% appreciation and favor buying at ~7%.**
 3. ~~**Sensitivity output.** An appreciation × return grid so the result's
    fragility is obvious at a glance.~~ **DONE 2026-06-26** — Chart 6, see the
    third update note at the top.
-4. **Terminal-value handling.** Extend a few years past payoff, or annotate the
-   owner's post-payoff housing-cost advantage.
+4. ~~**Terminal-value handling.** Extend a few years past payoff, or annotate the
+   owner's post-payoff housing-cost advantage.~~ **OUT OF SCOPE 2026-06-26** —
+   see gap #5; the fixed-horizon net-worth snapshot is complete and the renter
+   can buy at term end.
 5. **Lower-priority polish.** Inflation-adjusted (real) view toggle; grow
    insurance; let rent comparable be sourced/overridden more transparently.

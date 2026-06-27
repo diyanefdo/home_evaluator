@@ -1,8 +1,10 @@
 """FastAPI web layer for the Canadian buy-vs-rent home evaluator.
 
-Wraps the existing ``evaluator`` package: takes the four inputs from a form (or
-query string), runs the projection + charting pipeline, and returns a single
-HTML page with all five charts embedded inline (base64 PNGs — no file serving).
+Wraps the existing ``evaluator`` package: takes the inputs from a form (or query
+string), runs the projection pipeline, and returns a single HTML page that draws
+all six charts interactively in the browser with a vendored Plotly (hover, legend
+toggle, zoom) plus live what-if sliders. (The CLI still renders PNGs via
+``evaluator.charts``; the web no longer rasterizes charts server-side.)
 
 Run locally:
     uvicorn webapp:app --host 0.0.0.0 --port 8000
@@ -14,20 +16,25 @@ See knowledge/DOCKER_PRIVATE_DEPLOYMENT.md for containerized + private-link use.
 from __future__ import annotations
 
 import argparse
-import base64
 import html
+import json
 import os
 import secrets
-import shutil
-import tempfile
 
 from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.staticfiles import StaticFiles
 
-from evaluator import cli, projections, charts
+from evaluator import cli, projections
 
 app = FastAPI(title="Canadian Buy-vs-Rent Home Evaluator")
+
+# Vendored Plotly (no external CDN) for the interactive charts. Served open so the
+# library loads regardless of basic-auth on the pages.
+_STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+if os.path.isdir(_STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 # --------------------------------------------------------------------------- #
 # Optional HTTP basic-auth (recommended when exposed on a public link).
@@ -115,11 +122,11 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
  .field{display:flex;flex-direction:column}
  .field small{color:var(--muted);font-size:.78rem;margin-top:.35rem;font-weight:400}
  /* 16px input font stops iOS Safari from auto-zooming on focus */
- input,select{width:100%;padding:.7rem .8rem;border:1px solid #cfd9e4;border-radius:10px;
-   font-size:16px;background:#fbfdff;color:var(--ink);
+ input:not([type=range]),select{width:100%;padding:.7rem .8rem;border:1px solid #cfd9e4;
+   border-radius:10px;font-size:16px;background:#fbfdff;color:var(--ink);
    transition:border-color .15s,box-shadow .15s,background .15s}
- input:hover,select:hover{border-color:#aebfd2}
- input:focus,select:focus{outline:none;border-color:var(--brand);
+ input:not([type=range]):hover,select:hover{border-color:#aebfd2}
+ input:not([type=range]):focus,select:focus{outline:none;border-color:var(--brand);
    box-shadow:0 0 0 3px rgba(31,119,180,.18);background:#fff}
  /* auto-fit collapses the form from 2 columns to 1 on narrow screens */
  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.1rem}
@@ -186,25 +193,25 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
    box-shadow:0 2px 6px rgba(31,119,180,.35)}
  .chart-title{font-size:1.05rem;font-weight:700;margin:0;letter-spacing:-.01em;line-height:1.25}
  .chart-cap{color:var(--muted);font-size:.86rem;margin:0 0 .75rem}
- .chart-card img{margin:0;border:1px solid var(--line);border-radius:10px;box-shadow:none}
- .chart-img{cursor:zoom-in}
- .chart-hint{display:block;margin-top:.5rem;text-align:right;color:var(--muted);
-   font-size:.78rem;font-weight:500;letter-spacing:.01em}
+ .plot{width:100%;height:380px}
+ @media (max-width:480px){ .plot{height:320px} }
 
- /* fullscreen tap-to-expand chart viewer */
- .lightbox{position:fixed;inset:0;z-index:1000;display:none;
-   align-items:flex-start;justify-content:center;padding:1.2rem;
-   background:rgba(8,20,32,.93);overflow:auto;-webkit-overflow-scrolling:touch}
- .lightbox.open{display:flex}
- .lightbox img{width:auto;height:auto;max-width:100%;max-height:92vh;margin:auto;
-   background:#fff;border-radius:10px;box-shadow:0 18px 50px rgba(0,0,0,.55);
-   cursor:zoom-in}
- .lightbox img.zoomed{max-width:none;max-height:none;width:1400px;cursor:zoom-out}
- .lb-close{position:fixed;top:.6rem;right:.8rem;z-index:1001;width:44px;height:44px;
-   border:0;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;
-   font-size:1.7rem;line-height:1;cursor:pointer;
-   transition:background .15s}
- .lb-close:hover{background:rgba(255,255,255,.28)}
+ /* what-if sliders panel */
+ .whatif{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+   padding:1.1rem 1.2rem;box-shadow:var(--shadow);margin:1.1rem 0}
+ .whatif h2{font-size:1.05rem;margin:0 0 .15rem}
+ .whatif .wf-sub{color:var(--muted);font-size:.84rem;margin:0 0 .9rem}
+ .wf-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.7rem 1.4rem}
+ .wf-row label{display:flex;justify-content:space-between;align-items:baseline;
+   font-weight:600;font-size:.88rem;margin:0 0 .25rem}
+ .wf-val{color:var(--brand);font-weight:700}
+ input[type=range]{width:100%;accent-color:var(--brand);height:1.6rem;cursor:pointer;
+   padding:0;margin:0;background:transparent;border:0}
+ #wf-status{margin-left:.6rem;font-size:.8rem;color:var(--muted);font-weight:500;
+   opacity:0;transition:opacity .15s}
+ #wf-status.on{opacity:1}
+ .charts{transition:opacity .2s}
+ .charts.loading{opacity:.45}
 
  /* staggered entrance for results blocks */
  .reveal{opacity:0;animation:rise .6s cubic-bezier(.16,.84,.44,1) both}
@@ -281,25 +288,130 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 
 PAGE_FOOT = "</body></html>"
 
-# Fullscreen tap-to-expand viewer for charts (improves legibility on phones).
-# A single overlay is reused; openLb() points it at the tapped chart's source so
-# the (large) base64 image isn't duplicated in the DOM. Tap the image to toggle
-# zoom-to-actual-size (then pan by scrolling / pinch); tap the backdrop, the
-# close button, or press Esc to dismiss.
-LIGHTBOX = """
-<div id="lightbox" class="lightbox" onclick="closeLb(event)">
-  <button type="button" class="lb-close" aria-label="Close" onclick="closeLb(event,true)">&times;</button>
-  <img id="lb-img" alt="Expanded chart" onclick="toggleZoom(event)">
-</div>
-<script>
-function openLb(el){var lb=document.getElementById('lightbox'),im=document.getElementById('lb-img');
- im.src=el.src;im.alt=el.alt||'Expanded chart';im.classList.remove('zoomed');
- lb.classList.add('open');document.body.style.overflow='hidden';}
-function closeLb(e,force){if(force||(e&&e.target&&e.target.id==='lightbox')){
- document.getElementById('lightbox').classList.remove('open');document.body.style.overflow='';}}
-function toggleZoom(e){e.stopPropagation();e.currentTarget.classList.toggle('zoomed');}
-document.addEventListener('keydown',function(e){if(e.key==='Escape')closeLb(null,true);});
-</script>
+# What-if sliders behaviour. BASE (the fixed inputs) is injected per-result; this
+# is the static part. Sliders update their value labels instantly and, debounced,
+# call /api/recompute to re-render all charts + the headline numbers in place.
+WHATIF_SCRIPT_BODY = """
+var WF_T=null;
+function wfFmtPct(v){return v+'%';}
+function wfFmtMoney(v){return '$'+(+v).toLocaleString();}
+var WF_SLIDERS={
+  'down':{val:'wf-down-val',fmt:wfFmtPct},
+  'rate':{val:'wf-rate-val',fmt:wfFmtPct},
+  'appr':{val:'wf-appr-val',fmt:wfFmtPct},
+  'ret':{val:'wf-ret-val',fmt:wfFmtPct},
+  'rent':{val:'wf-rent-val',fmt:wfFmtMoney}
+};
+function wfLabels(){
+  for(var k in WF_SLIDERS){
+    var el=document.getElementById('s-'+k);
+    if(el) document.getElementById(WF_SLIDERS[k].val).textContent=WF_SLIDERS[k].fmt(el.value);
+  }
+}
+function wfStatus(on){var s=document.getElementById('wf-status');if(s)s.classList.toggle('on',on);
+  var c=document.getElementById('charts');if(c)c.classList.toggle('loading',on);}
+function wfSet(id,htmlVal){var e=document.getElementById(id);if(e&&htmlVal!=null)e.innerHTML=htmlVal;}
+function wfRecompute(){
+  var q=new URLSearchParams(BASE);
+  q.set('down', document.getElementById('s-down').value+'%');
+  q.set('rate', (document.getElementById('s-rate').value/100));
+  q.set('appreciation', (document.getElementById('s-appr').value/100));
+  q.set('investment_return', (document.getElementById('s-ret').value/100));
+  q.set('rent', document.getElementById('s-rent').value);
+  wfStatus(true);
+  fetch('/api/recompute?'+q.toString()).then(function(r){return r.json();}).then(function(d){
+    wfStatus(false);
+    if(!d.ok){wfSet('wf-by', d.error||'Could not update'); return;}
+    if(d.chart_data) renderCharts(d.chart_data);
+    wfSet('wf-verdict', d.verdict_word);
+    wfSet('wf-gap', d.gap_str);
+    wfSet('wf-by', d.by_str);
+    var s=d.stats||{};
+    wfSet('wf-down', s.down); wfSet('wf-mortgage', s.mortgage);
+    wfSet('wf-crossover', s.crossover); wfSet('wf-renter-tax', s.renter_tax);
+    wfSet('wf-buy-costs', s.buy_costs); wfSet('wf-sell-costs', s.sell_costs);
+  }).catch(function(){wfStatus(false);});
+}
+function wfOnInput(){wfLabels();clearTimeout(WF_T);WF_T=setTimeout(wfRecompute,350);}
+['down','rate','appr','ret','rent'].forEach(function(k){
+  var el=document.getElementById('s-'+k); if(el) el.addEventListener('input', wfOnInput);
+});
+wfLabels();
+"""
+
+# Interactive chart rendering with the vendored Plotly. renderCharts(d) is global
+# so the what-if sliders can re-render after /api/recompute. Hover tooltips,
+# clickable legend (toggle series), and box-zoom/reset come from Plotly for free.
+CHARTS_SCRIPT_BODY = """
+var C_FONT={family:'system-ui,-apple-system,Segoe UI,Roboto,sans-serif',size:12,color:'#16263a'};
+var C_CFG={responsive:true,displaylogo:false,scrollZoom:false,
+  modeBarButtonsToRemove:['lasso2d','select2d','autoScale2d','toggleSpikelines']};
+var C_HT='%{y:$,.0f}<extra>%{fullData.name}</extra>';
+function cMoneyAxis(t){return {title:t,tickprefix:'$',tickformat:'.2s',gridcolor:'#eef2f7',zeroline:false,automargin:true};}
+function cLayout(extra){
+  var b={margin:{l:62,r:16,t:10,b:42},hovermode:'x unified',
+    paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:C_FONT,
+    legend:{orientation:'h',y:1.14,x:0,font:{size:11}},
+    xaxis:{title:'Year',gridcolor:'#eef2f7',zeroline:false,automargin:true}};
+  for(var k in (extra||{})) b[k]=extra[k];
+  return b;
+}
+function cNearest(arr,v){var bi=-1,bd=1e18;for(var i=0;i<arr.length;i++){var dd=Math.abs(arr[i]-v);if(dd<bd){bd=dd;bi=i;}}return bi;}
+function cLine(x,y,name,color,opt){var t={x:x,y:y,name:name,mode:'lines',line:{color:color,width:(opt&&opt.w)||2.4},hovertemplate:C_HT};
+  if(opt&&opt.fill){t.fill=opt.fill;t.fillcolor=opt.fillcolor;} return t;}
+function renderCharts(d){
+  if(typeof Plotly==='undefined') return;
+  var x=d.years;
+  Plotly.react('chart-1',[
+    cLine(x,d.c1.home_value,'Home value','#1f77b4',{w:2.6}),
+    cLine(x,d.c1.loan_balance,'Mortgage balance','#d62728'),
+    cLine(x,d.c1.equity,'Equity','#2ca02c',{fill:'tozeroy',fillcolor:'rgba(44,160,44,0.08)'})
+  ],cLayout({yaxis:cMoneyAxis('Value')}),C_CFG);
+
+  function area(y,name,color){return {x:x,y:y,name:name,mode:'lines',stackgroup:'c2',
+    line:{width:0.5,color:color},fillcolor:color,hovertemplate:C_HT};}
+  Plotly.react('chart-2',[
+    area(d.c2.down,'Down payment','rgba(140,86,75,0.80)'),
+    area(d.c2.principal,'Principal','rgba(44,160,44,0.75)'),
+    area(d.c2.interest,'Interest','rgba(214,39,40,0.72)'),
+    area(d.c2.property_tax,'Property tax','rgba(148,103,189,0.72)'),
+    area(d.c2.carry,'Insurance/HOA/maint.','rgba(255,127,14,0.72)')
+  ],cLayout({yaxis:cMoneyAxis('Cumulative cost')}),C_CFG);
+
+  Plotly.react('chart-3',[
+    cLine(x,d.c3.contributions,'Contributions','#8c564b',{w:1.6,fill:'tozeroy',fillcolor:'rgba(140,86,75,0.10)'}),
+    cLine(x,d.c3.portfolio,'Portfolio value','#1f77b4',{w:2.6,fill:'tonexty',fillcolor:'rgba(31,119,180,0.12)'})
+  ],cLayout({yaxis:cMoneyAxis('Value')}),C_CFG);
+
+  Plotly.react('chart-4',[
+    cLine(x,d.c4.contributions,'Contributions','#8c564b',{w:1.6,fill:'tozeroy',fillcolor:'rgba(140,86,75,0.10)'}),
+    cLine(x,d.c4.portfolio,'Portfolio value','#ff7f0e',{w:2.6,fill:'tonexty',fillcolor:'rgba(255,127,14,0.12)'})
+  ],cLayout({yaxis:cMoneyAxis('Value')}),C_CFG);
+
+  Plotly.react('chart-5',[
+    cLine(x,d.c5.buyer,'Homeowner (after tax)','#1f77b4',{w:2.8}),
+    cLine(x,d.c5.renter,'Renter (after tax)','#ff7f0e',{w:2.8})
+  ],cLayout({yaxis:cMoneyAxis('Net worth')}),C_CFG);
+
+  if(d.c6 && d.c6.grid && d.c6.grid.length){
+    var shapes=[],anns=[];
+    var bi=cNearest(d.c6.appr,d.c6.base_appr), bj=cNearest(d.c6.ret,d.c6.base_ret);
+    if(bi>=0&&bj>=0){
+      shapes.push({type:'rect',x0:d.c6.ret[bj]-0.5,x1:d.c6.ret[bj]+0.5,
+        y0:d.c6.appr[bi]-0.5,y1:d.c6.appr[bi]+0.5,line:{color:'#111',width:2.2}});
+      anns.push({x:d.c6.ret[bj],y:d.c6.appr[bi],text:'your scenario',showarrow:false,
+        font:{size:9,color:'#111'},yshift:-1});
+    }
+    Plotly.react('chart-6',[{
+      type:'heatmap',x:d.c6.ret,y:d.c6.appr,z:d.c6.grid,colorscale:'RdYlGn',zmid:0,
+      hovertemplate:'appreciation %{y}% &middot; return %{x}%<br>gap %{z:$,.0f}<extra></extra>',
+      colorbar:{tickprefix:'$',tickformat:'.2s',thickness:12}
+    }],cLayout({shapes:shapes,annotations:anns,hovermode:'closest',
+      xaxis:{title:'Investment return %',dtick:1,zeroline:false},
+      yaxis:{title:'Home appreciation %',dtick:1,zeroline:false}}),C_CFG);
+  }
+}
+if(typeof CHART_DATA!=='undefined') renderCharts(CHART_DATA);
 """
 
 # Compact home-themed badge for the results banner. Mirrors the landing hero
@@ -341,7 +453,7 @@ FORM = PAGE_HEAD + """
     <span class="eyebrow"><span class="dot"></span> Canadian Home Finance</span>
     <h1>Buy&#8209;vs&#8209;Rent Home Evaluator</h1>
     <p>See whether buying or renting builds more wealth over your mortgage &mdash;
-       five clear charts from one scenario.</p>
+       six interactive charts from one scenario.</p>
   </div>
   <div class="hero-art" aria-hidden="true">
     <svg viewBox="0 0 240 220" role="img" xmlns="http://www.w3.org/2000/svg">
@@ -408,7 +520,7 @@ FORM = PAGE_HEAD + """
 
 <div class="card">
   <h1 class="section">Run a scenario</h1>
-  <p class="lead">Enter the four details below to generate your comparison charts.</p>
+  <p class="lead">Enter the details below to generate your comparison charts.</p>
   <form action="/evaluate" method="get">
     <div class="grid">
       <div class="field">
@@ -478,6 +590,159 @@ def _error_page(message: str) -> HTMLResponse:
     return HTMLResponse(body, status_code=400)
 
 
+def _chart_data(projection: dict, params: dict) -> dict:
+    """Extract the plottable series from a projection into a JSON-able dict.
+
+    The browser renders these with Plotly (interactive: hover, legend toggle,
+    zoom) — the server no longer rasterizes charts for the web. (The CLI still
+    uses matplotlib via evaluator.charts.)
+    """
+    yrs = projection["years"].tolist()
+    sens = projection.get("sensitivity") or {}
+
+    def col(key):
+        return projection[key].tolist()
+
+    down_payment = float(params["down_payment"])
+    return {
+        "years": yrs,
+        "term": int(params["term_years"]),
+        "c1": {
+            "home_value": col("home_value"),
+            "loan_balance": col("loan_balance"),
+            "equity": col("equity"),
+        },
+        "c2": {
+            "down": [down_payment] * len(yrs),
+            "principal": col("cum_principal"),
+            "interest": col("cum_interest"),
+            "property_tax": col("cum_property_tax"),
+            "carry": col("cum_insurance_hoa"),
+        },
+        "c3": {
+            "portfolio": col("renter_portfolio"),
+            "contributions": col("renter_contributions"),
+        },
+        "c4": {
+            "portfolio": col("owner_adv_portfolio"),
+            "contributions": col("owner_adv_contributions"),
+        },
+        "c5": {
+            "buyer": col("buyer_net_worth_after_tax"),
+            "renter": col("renter_net_worth_after_tax"),
+        },
+        "c6": {
+            "appr": (sens["appreciation_values"] * 100).tolist() if sens else [],
+            "ret": (sens["return_values"] * 100).tolist() if sens else [],
+            "grid": sens["gap_grid"].tolist() if sens else [],
+            "base_appr": float(sens.get("base_appreciation", 0)) * 100 if sens else 0,
+            "base_ret": float(sens.get("base_return", 0)) * 100 if sens else 0,
+        },
+    }
+
+
+def _run_scenario(
+    *, price, down, years, postal, age, income, strategy, first_time,
+    rate=None, appreciation=None, rent=None, rent_growth=None,
+    property_tax_rate=None, investment_return=None, insurance=1500.0, hoa=0.0,
+    retirement_rate=None,
+) -> dict:
+    """Validate inputs, run the full pipeline, build the chart data.
+
+    Shared by the HTML results page and the JSON /api/recompute endpoint. Raises
+    ValueError (with a user-facing message) on bad input; otherwise returns a
+    dict with the JSON chart data (for Plotly) + the derived display values.
+    """
+    if not (0 < price <= MAX_PRICE):
+        raise ValueError(f"Price must be between $1 and ${MAX_PRICE:,.0f}.")
+    if not (1 <= years <= MAX_YEARS):
+        raise ValueError(f"Mortgage term must be between 1 and {MAX_YEARS} years.")
+    try:
+        down_amount = cli._parse_down_payment(down, price)
+    except ValueError:
+        raise ValueError(f"Could not read down payment '{down}'. Use e.g. 200000 or 20%.")
+    if not (0 < down_amount < price):
+        raise ValueError("Down payment must be greater than $0 and less than the price.")
+    if not (18 <= age <= 100):
+        raise ValueError("Age must be between 18 and 100.")
+    if not (0 <= income <= 100_000_000):
+        raise ValueError("Annual income must be $0 or more.")
+    if strategy not in ("shelter-first", "taxable-only"):
+        raise ValueError("Investing strategy must be 'shelter-first' or 'taxable-only'.")
+
+    args = argparse.Namespace(
+        price=price, down=down, years=years, postal=postal,
+        age=age, income=income, account_strategy=strategy, retirement_rate=retirement_rate,
+        first_time_buyer=first_time, commission_rate=None, purchase_legal=None,
+        no_transaction_costs=False,
+        rate=rate, appreciation=appreciation, rent=rent, rent_growth=rent_growth,
+        property_tax_rate=property_tax_rate, investment_return=investment_return,
+        insurance=insurance, hoa=hoa, out=None, no_charts=False,
+    )
+    try:
+        params = cli.build_engine_params(args)
+        projection = projections.build_projection(params)
+        projection["sensitivity"] = projections.build_sensitivity(params)
+        summary = projections.compute_summary(projection, params)
+        chart_data = _chart_data(projection, params)
+    except Exception as exc:  # noqa: BLE001 - surface any modelling error to the user
+        raise ValueError(f"Could not evaluate this scenario: {exc}")
+
+    sym = params["currency_symbol"]
+    cy = summary.get("crossover_year")
+    cross = f"~ year {cy:.1f}" if cy else "Not within term"
+    gap = summary["final_buyer_minus_renter"]
+    leader = "buyer" if gap >= 0 else "renter"
+    verdict_word = "Buying" if leader == "buyer" else "Renting"
+    pct = params["down_payment"] / params["purchase_price"] * 100
+    after_tax = bool(summary.get("after_tax"))
+    strat_label = ("TFSA & RRSP first" if summary.get("account_strategy") == "shelter-first"
+                   else "Taxable only")
+
+    return {
+        "chart_data": chart_data,
+        "summary": summary,
+        "params": params,
+        "sym": sym,
+        "cross": cross,
+        "gap": gap,
+        "leader": leader,
+        "verdict_word": verdict_word,
+        "pct": pct,
+        "after_tax": after_tax,
+        "strat_label": strat_label,
+        "years": int(years),
+    }
+
+
+def _result_fields(sc: dict) -> dict:
+    """Build the dynamic display strings (verdict, gap, stat tiles).
+
+    Shared so the initial page and /api/recompute render identical markup.
+    """
+    summary = sc["summary"]
+    params = sc["params"]
+    sym = sc["sym"]
+    years = sc["years"]
+    tax_tag = " after tax" if sc["after_tax"] else ""
+    stats = {
+        "down": f'{sym}{params["down_payment"]:,.0f} <small>({sc["pct"]:.0f}%)</small>',
+        "mortgage": f'{years} yr <small>@ {params["mortgage_rate"] * 100:.2f}%</small>',
+        "crossover": sc["cross"],
+        "renter_tax": f'{sym}{summary.get("renter_tax_paid", 0):,.0f}',
+        "buy_costs": (f'{sym}{summary.get("purchase_closing_costs", 0):,.0f} '
+                      '<small>(land-transfer + legal)</small>'),
+        "sell_costs": (f'{sym}{summary.get("selling_costs_final", 0):,.0f} '
+                       '<small>(commission + HST)</small>'),
+    }
+    return {
+        "verdict_word": f'{sc["verdict_word"]} comes out ahead',
+        "gap_str": f'{sym}{abs(sc["gap"]):,.0f}',
+        "by_str": f"net-worth gap{tax_tag} by year {years}",
+        "stats": stats,
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(_: None = Depends(require_auth)) -> str:
     return FORM
@@ -511,93 +776,53 @@ def evaluate(
     retirement_rate: float | None = None,
     _: None = Depends(require_auth),
 ):
-    # --- validate inputs up front (don't rely on the CLI's SystemExit) -------
-    if not (0 < price <= MAX_PRICE):
-        return _error_page(f"Price must be between $1 and ${MAX_PRICE:,.0f}.")
-    if not (1 <= years <= MAX_YEARS):
-        return _error_page(f"Mortgage term must be between 1 and {MAX_YEARS} years.")
     try:
-        down_amount = cli._parse_down_payment(down, price)
-    except ValueError:
-        return _error_page(f"Could not read down payment '{down}'. Use e.g. 200000 or 20%.")
-    if not (0 < down_amount < price):
-        return _error_page("Down payment must be greater than $0 and less than the price.")
-    if not (18 <= age <= 100):
-        return _error_page("Age must be between 18 and 100.")
-    if not (0 <= income <= 100_000_000):
-        return _error_page("Annual income must be $0 or more.")
-    if strategy not in ("shelter-first", "taxable-only"):
-        return _error_page("Investing strategy must be 'shelter-first' or 'taxable-only'.")
+        sc = _run_scenario(
+            price=price, down=down, years=years, postal=postal,
+            age=age, income=income, strategy=strategy, first_time=first_time,
+            rate=rate, appreciation=appreciation, rent=rent, rent_growth=rent_growth,
+            property_tax_rate=property_tax_rate, investment_return=investment_return,
+            insurance=insurance, hoa=hoa, retirement_rate=retirement_rate,
+        )
+    except ValueError as exc:
+        return _error_page(str(exc))
+    params = sc["params"]
 
-    # --- run the pipeline (reuse the CLI's validated param mapping) ----------
-    args = argparse.Namespace(
-        price=price, down=down, years=years, postal=postal,
-        age=age, income=income, account_strategy=strategy, retirement_rate=retirement_rate,
-        first_time_buyer=first_time, commission_rate=None, purchase_legal=None,
-        no_transaction_costs=False,
-        rate=rate, appreciation=appreciation, rent=rent, rent_growth=rent_growth,
-        property_tax_rate=property_tax_rate, investment_return=investment_return,
-        insurance=insurance, hoa=hoa, out=None, no_charts=False,
-    )
-    try:
-        params = cli.build_engine_params(args)
-        projection = projections.build_projection(params)
-        summary = projections.compute_summary(projection, params)
-    except Exception as exc:  # noqa: BLE001 - surface any modelling error to the user
-        return _error_page(f"Could not evaluate this scenario: {exc}")
-
-    # Title + caption for each chart, in the order generate_charts() emits them.
+    # Title + caption for each chart, in render order. The browser draws these
+    # interactively with Plotly into the chart-N divs below.
     chart_meta = [
         ("House price trajectory",
          "Projected market value of the home across the term."),
-        ("Down payment and monthly costs",
-         "Up-front cash and what each monthly payment covers."),
+        ("Cumulative cost of ownership",
+         "Up-front cash and what each payment covers, stacked over time."),
         ("Renter's invested savings",
          "Renting and investing the monthly cost difference instead of buying."),
         ("Owner's invested savings",
          "Buying and investing any monthly surplus alongside the home."),
-        ("Net worth: buy vs rent",
+        ("Net worth: buy vs rent (after tax)",
          "Total projected wealth under each path, side by side."),
         ("Sensitivity: who wins",
          "How the result shifts across home-appreciation and investment-return assumptions."),
     ]
 
-    out_dir = tempfile.mkdtemp(prefix="charts_")
-    try:
-        projection["sensitivity"] = projections.build_sensitivity(params)
-        paths = charts.generate_charts(projection, params, out_dir)
-        cards = ""
-        for i, p in enumerate(paths):
-            with open(p, "rb") as fh:
-                b64 = base64.b64encode(fh.read()).decode()
-            title, cap = chart_meta[i] if i < len(chart_meta) else (f"Chart {i + 1}", "")
-            cards += (
-                '<figure class="chart-card reveal">'
-                '<div class="chart-head">'
-                f'<span class="chart-num">{i + 1}</span>'
-                f'<h2 class="chart-title">{html.escape(title)}</h2>'
-                '</div>'
-                f'<p class="chart-cap">{html.escape(cap)}</p>'
-                f'<img class="chart-img" src="data:image/png;base64,{b64}"'
-                f' alt="{html.escape(title)}" onclick="openLb(this)">'
-                '<span class="chart-hint">&#9974; Tap to enlarge</span>'
-                '</figure>'
-            )
-        imgs = f'<div class="charts">{cards}</div>'
-    finally:
-        shutil.rmtree(out_dir, ignore_errors=True)
+    cards = ""
+    for i, (title, cap) in enumerate(chart_meta):
+        cards += (
+            '<figure class="chart-card reveal">'
+            '<div class="chart-head">'
+            f'<span class="chart-num">{i + 1}</span>'
+            f'<h2 class="chart-title">{html.escape(title)}</h2>'
+            '</div>'
+            f'<p class="chart-cap">{html.escape(cap)}</p>'
+            f'<div id="chart-{i + 1}" class="plot"></div>'
+            '</figure>'
+        )
+    imgs = f'<div class="charts" id="charts">{cards}</div>'
 
-    sym = params["currency_symbol"]
-    cy = summary.get("crossover_year")
-    cross = f"~ year {cy:.1f}" if cy else "Not within term"
-    gap = summary["final_buyer_minus_renter"]
-    leader = "buyer" if gap >= 0 else "renter"
-    verdict_word = "Buying" if leader == "buyer" else "Renting"
-    pct = params["down_payment"] / params["purchase_price"] * 100
-    after_tax = summary.get("after_tax")
-    tax_tag = " after tax" if after_tax else ""
-    strat_label = ("TFSA &amp; RRSP first" if summary.get("account_strategy") == "shelter-first"
-                   else "Taxable only")
+    f = _result_fields(sc)
+    s = f["stats"]
+    sym = sc["sym"]
+    strat_label = sc["strat_label"].replace("&", "&amp;")
 
     banner = (
         '<section class="result-banner reveal">'
@@ -606,56 +831,126 @@ def evaluate(
         '<span class="eyebrow"><span class="dot"></span> Your results</span>'
         f"<h1>{html.escape(params['postal_code'])} &middot; {html.escape(params['region_label'])}</h1>"
         '<p class="verdict">'
-        f'<span class="lead">{verdict_word} comes out ahead</span>'
-        f'<span class="v-amount">{sym}{abs(gap):,.0f}</span>'
-        f'<span class="by">net-worth gap{tax_tag} by year {years}</span>'
+        f'<span class="lead" id="wf-verdict">{f["verdict_word"]}</span>'
+        f'<span class="v-amount" id="wf-gap">{f["gap_str"]}</span>'
+        f'<span class="by" id="wf-by">{f["by_str"]}</span>'
         '</p>'
         '</div>'
         '</section>'
     )
 
-    # Optional after-tax + transaction-cost stat tiles (only when they ran).
-    tax_tiles = ""
-    if after_tax:
-        tax_tiles = (
-            f'<div class="stat"><span class="k">Strategy</span>'
-            f'<span class="v" style="font-size:.95rem">{strat_label}</span></div>'
-            f'<div class="stat"><span class="k">Renter tax at sale</span>'
-            f'<span class="v">{sym}{summary.get("renter_tax_paid", 0):,.0f}</span></div>'
-        )
-        if summary.get("purchase_closing_costs") or summary.get("selling_costs_final"):
-            tax_tiles += (
-                f'<div class="stat"><span class="k">Buy closing costs</span>'
-                f'<span class="v">{sym}{summary.get("purchase_closing_costs", 0):,.0f} '
-                f'<small>(land-transfer + legal)</small></span></div>'
-                f'<div class="stat"><span class="k">Sell costs at yr {years}</span>'
-                f'<span class="v">{sym}{summary.get("selling_costs_final", 0):,.0f} '
-                f'<small>(commission + HST)</small></span></div>'
-            )
-
     stats = (
         '<div class="result-summary reveal">'
         f'<div class="stat"><span class="k">Home price</span>'
-        f'<span class="v">{sym}{params["purchase_price"]:,.0f}</span></div>'
+        f'<span class="v" id="wf-price">{sym}{params["purchase_price"]:,.0f}</span></div>'
         f'<div class="stat"><span class="k">Down payment</span>'
-        f'<span class="v">{sym}{params["down_payment"]:,.0f} <small>({pct:.0f}%)</small></span></div>'
+        f'<span class="v" id="wf-down">{s["down"]}</span></div>'
         f'<div class="stat"><span class="k">Mortgage</span>'
-        f'<span class="v">{years} yr <small>@ {params["mortgage_rate"] * 100:.2f}%</small></span></div>'
+        f'<span class="v" id="wf-mortgage">{s["mortgage"]}</span></div>'
         f'<div class="stat"><span class="k">Crossover</span>'
-        f'<span class="v">{cross}</span></div>'
-        + tax_tiles
-        + '</div>'
+        f'<span class="v" id="wf-crossover">{s["crossover"]}</span></div>'
+        f'<div class="stat"><span class="k">Strategy</span>'
+        f'<span class="v" style="font-size:.95rem">{strat_label}</span></div>'
+        f'<div class="stat"><span class="k">Renter tax at sale</span>'
+        f'<span class="v" id="wf-renter-tax">{s["renter_tax"]}</span></div>'
+        f'<div class="stat"><span class="k">Buy closing costs</span>'
+        f'<span class="v" id="wf-buy-costs">{s["buy_costs"]}</span></div>'
+        f'<div class="stat"><span class="k">Sell costs at yr {sc["years"]}</span>'
+        f'<span class="v" id="wf-sell-costs">{s["sell_costs"]}</span></div>'
+        '</div>'
+    )
+
+    # What-if sliders, initialized to this scenario's current assumptions.
+    d_pct = round(sc["pct"])
+    r_rate = round(params["mortgage_rate"] * 100, 1)
+    r_appr = round(params["appreciation_rate"] * 100, 1)
+    r_ret = round(params["investment_return_rate"] * 100, 1)
+    r_rent = int(round(params["rent_monthly"]))
+    whatif = (
+        '<section class="whatif" id="whatif">'
+        '<h2>What-if &middot; adjust the assumptions <span id="wf-status">updating&hellip;</span></h2>'
+        '<p class="wf-sub">Drag a slider to update the charts and verdict live.</p>'
+        '<div class="wf-grid">'
+        f'<div class="wf-row"><label>Down payment <span class="wf-val" id="wf-down-val">{d_pct}%</span></label>'
+        f'<input type="range" id="s-down" min="5" max="50" step="1" value="{d_pct}"></div>'
+        f'<div class="wf-row"><label>Mortgage rate <span class="wf-val" id="wf-rate-val">{r_rate}%</span></label>'
+        f'<input type="range" id="s-rate" min="1" max="8" step="0.1" value="{r_rate}"></div>'
+        f'<div class="wf-row"><label>Home appreciation <span class="wf-val" id="wf-appr-val">{r_appr}%</span></label>'
+        f'<input type="range" id="s-appr" min="0" max="10" step="0.5" value="{r_appr}"></div>'
+        f'<div class="wf-row"><label>Investment return <span class="wf-val" id="wf-ret-val">{r_ret}%</span></label>'
+        f'<input type="range" id="s-ret" min="0" max="15" step="0.5" value="{r_ret}"></div>'
+        f'<div class="wf-row"><label>Monthly rent <span class="wf-val" id="wf-rent-val">${r_rent:,}</span></label>'
+        f'<input type="range" id="s-rent" min="1000" max="10000" step="100" value="{r_rent}"></div>'
+        '</div>'
+        '</section>'
+    )
+
+    base_js = json.dumps({
+        "price": price, "years": sc["years"], "postal": postal, "age": age,
+        "income": income, "strategy": strategy,
+        "first_time": "true" if first_time else "false",
+    })
+    script = (
+        '<script src="/static/plotly.min.js"></script>'
+        "<script>\n"
+        "var CHART_DATA=" + json.dumps(sc["chart_data"]) + ";\n"
+        "var BASE=" + base_js + ";\n"
+        + CHARTS_SCRIPT_BODY + "\n"
+        + WHATIF_SCRIPT_BODY + "\n</script>"
     )
 
     body = (
         PAGE_HEAD
         + banner
         + stats
+        + whatif
         + imgs
         + '<p><a class="back" href="/">&larr; Run another scenario</a></p>'
         + '<p class="disclaimer">Projections use long-run historical assumptions '
         + 'and are not financial advice.</p>'
-        + LIGHTBOX
+        + script
         + PAGE_FOOT
     )
     return HTMLResponse(body)
+
+
+@app.get("/api/recompute")
+def recompute(
+    price: float,
+    down: str = "20%",
+    years: int = 30,
+    postal: str = "M2J 0E8",
+    age: int = 35,
+    income: float = 120000.0,
+    strategy: str = "shelter-first",
+    first_time: bool = False,
+    rate: float | None = None,
+    appreciation: float | None = None,
+    rent: float | None = None,
+    investment_return: float | None = None,
+    _: None = Depends(require_auth),
+) -> JSONResponse:
+    """JSON endpoint powering the what-if sliders: new chart data + headline.
+
+    Returns the chart series (for Plotly to re-render client-side) plus the
+    dynamic display strings, so the results page updates in place without a reload.
+    """
+    try:
+        sc = _run_scenario(
+            price=price, down=down, years=years, postal=postal,
+            age=age, income=income, strategy=strategy, first_time=first_time,
+            rate=rate, appreciation=appreciation, rent=rent,
+            investment_return=investment_return,
+        )
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+
+    f = _result_fields(sc)
+    return JSONResponse({
+        "ok": True,
+        "chart_data": sc["chart_data"],
+        "verdict_word": f["verdict_word"],
+        "gap_str": f["gap_str"],
+        "by_str": f["by_str"],
+        "stats": f["stats"],
+    })

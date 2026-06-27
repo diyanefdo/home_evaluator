@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # App code.
 COPY evaluator/ ./evaluator/
 COPY webapp.py .
+COPY static/ ./static/
 
 # matplotlib uses the Agg backend (set in charts.py) — no display needed.
 # Give it a writable, container-local config dir.

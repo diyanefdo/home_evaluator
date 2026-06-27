@@ -79,8 +79,13 @@ all others fall back to Canada-wide defaults. Add more regions in
 
 ## Run as a web service (Docker)
 
-A thin FastAPI layer (`webapp.py`) serves the same analysis as a web page with
-all six charts embedded inline.
+A thin FastAPI layer (`webapp.py`) serves the same analysis as a web page. The
+six charts are **interactive** (client-side [Plotly](https://plotly.com/javascript/),
+vendored locally at `static/plotly.min.js` — no CDN): hover tooltips, clickable
+legend to toggle series, and zoom. There are also **what-if sliders** (down
+payment, rate, appreciation, investment return, rent) that re-render the charts
+and verdict live via `/api/recompute`. The web path sends chart *data* to the
+browser (no server-side image rendering); the CLI still writes matplotlib PNGs.
 
 ```bash
 # local

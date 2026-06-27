@@ -89,7 +89,7 @@ aggressively and attribute sources.
 | **CMHC insurance for <20% down** | Add mortgage default insurance premiums when down payment is under 20%. | S | Medium |
 | **Real (inflation-adjusted) view** (gap #7) | Toggle nominal vs today's-dollars. | S | Medium |
 | **Rental income / house hacking** | Model a basement suite or roommate offsetting ownership cost. | M | Medium |
-| **Sliders / what-if** | Live-update charts as you drag down-payment %, rate, appreciation. | M | High (engagement) |
+| ~~**Sliders / what-if**~~ ✅ **DONE** | Results page has live sliders (down %, rate, appreciation, return, rent); debounced `/api/recompute` re-renders all 6 charts + the headline verdict in place. | M | High (engagement) |
 
 ---
 
@@ -97,7 +97,7 @@ aggressively and attribute sources.
 
 | Idea | What | Effort | Impact |
 |------|------|--------|--------|
-| **Interactive charts** | Swap static matplotlib PNGs for client-side interactive charts (Plotly/Chart.js) — hover tooltips, toggle series, zoom. Removes the need for the tap-to-expand workaround. | M–L | High |
+| ~~**Interactive charts**~~ ✅ **DONE** | Web charts are client-side **Plotly** (vendored locally at `static/plotly.min.js`, no CDN) — hover tooltips, clickable legend, zoom/reset. Server sends chart *data* (not PNGs); CLI still uses matplotlib. | M–L | High |
 | **PDF / email report** | "Download as PDF" or email a formatted summary the user can keep or share with a partner/advisor. | M | Medium |
 | **PWA / installable** | Make the web app installable on phones (offline shell, home-screen icon). | S–M | Medium |
 | **Presets & examples** | One-click sample scenarios ("first condo", "detached + suite") to onboard new users. | S | Low–Med |
@@ -142,7 +142,7 @@ A pragmatic order that front-loads value and respects dependencies:
 - Nearby listings (only with a properly-sourced/legal data feed).
 
 **Phase 4 — Polish & engagement**
-- Interactive charts + what-if sliders.
+- ✅ Interactive charts (Plotly) + what-if sliders — done.
 - PDF/email reports, PWA, bilingual.
 - Monte Carlo simulation.
 
