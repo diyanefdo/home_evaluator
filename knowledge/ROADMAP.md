@@ -12,8 +12,10 @@ it's a menu to prioritize from.
 - **Modeling:** after-tax buy-vs-rent with registered accounts (TFSA/RRSP),
   capital-gains tax, principal-residence exemption, and transaction costs
   (land-transfer tax + sale commission).
-- **Data:** hard-coded regional assumptions for Toronto/North York FSAs +
-  national fallbacks (no live data).
+- **Data:** regional assumptions for Toronto/North York FSAs, an **all-Ontario
+  tier** (City of Toronto + provincial default for K/L/N/P), and national
+  fallbacks. The **5-year mortgage rate is live** (Bank of Canada Valet API,
+  cached, with offline fallback); other inputs are still researched constants.
 - **State:** completely **stateless** — no database, no user accounts, every run
   is one-shot. Auth is optional HTTP basic-auth.
 - **Known modeling gaps still open** (see `METHODOLOGY_GAPS.md`): #5 terminal
@@ -54,9 +56,9 @@ passwords (use `argon2`/`bcrypt`). Keep the DB volume backed up.
 | **Nearby homes for sale** | Given a postal code / address, list comparable active listings (price, beds, sqft, link). Auto-suggest a realistic purchase price. | L | High |
 | **Comparable rentals** | Pull nearby rental listings to ground the `rent_monthly` assumption (today it's a single hard-coded number — gap #7). Show a rent range, not one figure. | M–L | High |
 | **Address autofill** | Enter an address → geocode → derive FSA, property-tax rate, and a price estimate; pre-fill the form. | M | High |
-| **Live mortgage rates** | Fetch current 5-yr fixed/variable rates (e.g. Ratehub) instead of the baked-in 4.4%. | S–M | Medium |
+| **Live mortgage rates** ✅ | **DONE.** `evaluator/live.py` fetches the 5yr GoC benchmark yield from the **Bank of Canada Valet API** and derives the discounted fixed rate (+spread); cached (12h TTL) with offline fallback. `--live` / `EVALUATOR_LIVE_DATA` (web defaults on). | S–M | Medium |
 | **Neighbourhood stats** | Price trends, days-on-market, price-to-rent ratio, school/transit scores for the area. | M | Medium |
-| **More regions** | Expand `data.py` beyond North York: more Toronto FSAs, other cities/provinces, each with researched appreciation/rent/tax + correct land-transfer rules (BC PTT, no LTT in AB/SK, etc.). | M (ongoing) | High |
+| **More regions** | Expand `data.py` further: per-CMA Ontario tiers (Ottawa, Hamilton, London, KW…) with real municipal property-tax rates, then other provinces with correct land-transfer rules (BC PTT, no LTT in AB/SK, etc.). *Ontario-wide coverage is now in place* (see below). | M (ongoing) | High |
 
 **Data sources & the big caveat:** there is **no free official MLS API**.
 Options, roughly in order of legitimacy:
@@ -72,6 +74,59 @@ Options, roughly in order of legitimacy:
 StatCan/Teranet trends, municipal tax tables) to improve the *assumptions*; treat
 live *individual listings* as a later, carefully-sourced feature. Cache
 aggressively and attribute sources.
+
+### All-Ontario coverage
+
+Today only the four North York FSAs (`M2H/M2J/M2K/M2N`) have researched values;
+every other Ontario postal code falls through to `NATIONAL_DEFAULTS`. Expanding to
+all of Ontario is **easier than it looks**, because the most fiddly piece is
+already done:
+
+- **Land-transfer tax is already province-correct.** `tax.land_transfer_tax()`
+  always charges the **Ontario provincial LTT** and only *adds* the **Toronto
+  municipal LTT** when `region == "toronto"`. So for any non-Toronto Ontario
+  address the LTT and closing costs are already right — only the appreciation /
+  rent / property-tax *assumptions* are still national fallbacks.
+- **What's actually region-specific in `data.py`:** appreciation, current rent +
+  rent growth, property-tax rate, and (optionally) local mortgage/insurance
+  nuances. Everything else (S&P 500 CAGR, mortgage rate, tax brackets) is not
+  geographic.
+
+Two ways to cover Ontario, cheapest first:
+
+1. **Province tier (S, do-now).** ✅ **DONE.** `data.ONTARIO_DEFAULTS` sits
+   between Toronto and national (Ontario-wide appreciation, an Ontario rent
+   figure, ~1.1% property tax, `ltt_region="ontario"`). Routing: explicit North
+   York FSAs → researched Toronto data; any other `M` FSA → City of Toronto
+   (keeps Toronto property tax + municipal LTT); `K/L/N/P` → `ONTARIO_DEFAULTS`;
+   everything else → national. Instantly better than the Canada-wide proxy for
+   every Ontario user.
+2. **Per-CMA tiers (M, ongoing).** Add researched rows for the big markets
+   (Ottawa, Hamilton, London, Kitchener–Waterloo, Windsor, Kingston, Barrie,
+   etc.), each keyed by its FSAs, with the municipality's actual residential
+   property-tax rate. This is the same pattern as the Toronto row, repeated.
+
+### Is live data possible? (yes — for the *assumptions*, mostly not for listings)
+
+The macro inputs that drive the verdict **can** be pulled live from free, official
+sources; individual MLS listings essentially cannot without paid/brokerage access.
+
+| Input | Live source (free, legit) | Feasibility |
+|-------|---------------------------|-------------|
+| Mortgage rates | **Bank of Canada Valet API** (posted/benchmark rates, JSON) | Easy — real API, just fetch + cache daily |
+| Bond yields (to derive fixed-rate trend) | Bank of Canada Valet API | Easy |
+| Appreciation trend | **Teranet–National Bank HPI**, StatCan New Housing Price Index | Medium — periodic download, region-level |
+| Average rents | **CMHC HMIP** (rents by CMA / zone / bedroom) | Medium — annual data, downloadable, not real-time |
+| Property-tax rate | Municipal open-data / published rate tables (MPAC assesses, municipality sets rate) | Medium — no single API; compile a table per municipality |
+| Individual listings (price/beds/sqft) | CREA DDF (brokerage membership) only; portals = ToS risk | Hard / gated — keep as a later, carefully-sourced feature |
+
+**Practical shape:** a small `live/` fetcher module with **per-source caching**
+(e.g. SQLite or a JSON cache with TTLs — rates daily, rents/HPI/tax annually),
+falling back to the baked-in `data.py` values when a fetch fails. Mortgage rates
+via the Bank of Canada Valet API are the best first target: smallest, most
+volatile, real API, immediately visible to users. Aggregate rents/HPI/tax improve
+the *defaults* per region but change slowly, so live-fetching them is lower
+priority than just researching them once into the Ontario/CMA tiers above.
 
 ---
 

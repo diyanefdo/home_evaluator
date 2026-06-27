@@ -23,7 +23,25 @@ TORONTO_M2J = {
     "ltt_region": "toronto",           # land-transfer tax: Ontario provincial + Toronto municipal
 }
 
-# Canada-wide fallbacks for any non-Toronto postal code
+# Ontario-wide defaults for any Ontario postal code outside the City of Toronto.
+# These are province-level aggregates (researched, slow-moving) — sit between the
+# Toronto figures and the national fallback. Land-transfer tax is already correct
+# province-wide: tax.land_transfer_tax() charges the Ontario provincial LTT for
+# ltt_region="ontario" and only adds the municipal LTT for "toronto".
+ONTARIO_DEFAULTS = {
+    "home_appreciation_rate": 0.05,    # Ontario long-run ~5%/yr (GTA-weighted; Teranet ON HPI)
+    "maintenance_pct_of_value": 0.01,  # 1% of value/yr
+    "current_5yr_fixed_rate": 0.044,   # baseline; overlaid by live BoC rate when --live
+    "mortgage_rate_30yr_avg": 0.055,   # Cdn 5yr fixed 30yr avg
+    "current_monthly_rent": 2800,      # CAD, Ontario single-family proxy (between national & Toronto)
+    "rent_growth_rate": 0.035,         # 3.5%/yr; Ontario has run hot
+    "property_tax_rate": 0.011,        # ~1.1% Ontario municipal avg (Toronto low ~0.77%, many cities 1-1.5%)
+    "property_tax_growth_rate": 0.03,  # 3%/yr long-run
+    "sp500_nominal_cagr": 0.10,        # 10% nominal w/ dividends
+    "ltt_region": "ontario",           # Ontario provincial LTT only (no municipal LTT outside Toronto)
+}
+
+# Canada-wide fallbacks for any non-Ontario postal code
 NATIONAL_DEFAULTS = {
     "home_appreciation_rate": 0.045,   # Canada-wide long-term ~4-5%/yr
     "maintenance_pct_of_value": 0.01,  # 1% of value/yr
@@ -47,6 +65,11 @@ _FSA_TO_PARAMS = {
     "M2N": TORONTO_M2J,
 }
 
+# Canadian postal districts (first letter) that fall inside Ontario. "M" is the
+# City of Toronto specifically (municipal LTT applies), so it's handled
+# separately from the rest of the province (K, L, N, P).
+_ONTARIO_DISTRICTS = {"K", "L", "N", "P"}
+
 
 def _fsa(postal_code: str) -> str:
     """Return the uppercased 3-char Forward Sortation Area of a postal code."""
@@ -54,15 +77,41 @@ def _fsa(postal_code: str) -> str:
     return cleaned[:3]
 
 
-def get_params(postal_code: str) -> dict:
+def get_params(postal_code: str, *, live: bool = False) -> dict:
     """Return the assumption set for a postal code.
 
-    Falls back to NATIONAL_DEFAULTS when the FSA is unknown. The returned dict
-    is a fresh copy, safe for the caller to mutate (e.g. apply CLI overrides).
+    Routing, most specific first:
+      1. a researched FSA (e.g. North York M2J);
+      2. any other ``M`` FSA -> City of Toronto (Toronto property tax + municipal
+         land-transfer tax), using the North York figures as the city proxy;
+      3. any other Ontario district (K/L/N/P) -> ONTARIO_DEFAULTS;
+      4. everything else -> NATIONAL_DEFAULTS.
+
+    With ``live=True`` the volatile 5-year mortgage rate is overlaid from the
+    Bank of Canada (see ``evaluator.live``); if that fetch fails the baked-in
+    rate is kept. The returned dict is a fresh copy, safe for the caller to
+    mutate (e.g. apply CLI overrides).
     """
-    params = _FSA_TO_PARAMS.get(_fsa(postal_code), NATIONAL_DEFAULTS)
+    fsa = _fsa(postal_code)
+    if fsa in _FSA_TO_PARAMS:
+        params, label = _FSA_TO_PARAMS[fsa], "Toronto / North York (M2J)"
+    elif fsa[:1] == "M":
+        params, label = TORONTO_M2J, "Toronto (city default)"
+    elif fsa[:1] in _ONTARIO_DISTRICTS:
+        params, label = ONTARIO_DEFAULTS, "Ontario (provincial default)"
+    else:
+        params, label = NATIONAL_DEFAULTS, "Canada (national default)"
+
     result = dict(params)
-    result["_region"] = "Toronto / North York (M2J)" if params is TORONTO_M2J else "Canada (national default)"
+    result["_region"] = label
+
+    if live:
+        from evaluator import live as live_data   # local import: keep data layer network-free by default
+        rate = live_data.live_mortgage_rate()
+        if rate:
+            result["current_5yr_fixed_rate"] = rate["rate"]
+            result["_live"] = rate
+
     return result
 
 
@@ -72,4 +121,8 @@ SOURCES = {
     "appreciation": "https://rates.ca/resources/toronto-home-prices-20-years-growth ; TRREB market data",
     "rent": "https://www.zumper.com/rent-research/toronto-on ; CMHC HMIP rental tables",
     "sp500": "https://www.slickcharts.com/sp500/returns ; https://www.macrotrends.net/2526/sp-500-historical-annual-returns",
+    "ontario_appreciation": "Teranet-National Bank HPI (Ontario CMAs) ; StatCan New Housing Price Index",
+    "ontario_rent": "CMHC Housing Market Information Portal (Ontario CMAs)",
+    "ontario_property_tax": "Municipal residential rate tables (MPAC assessed) ; rates vary by municipality",
+    "live_mortgage_rate": "Bank of Canada Valet API series BD.CDN.5YR.DQ.YLD (5yr GoC benchmark yield) + lender spread",
 }

@@ -49,7 +49,8 @@ def build_engine_params(args: argparse.Namespace) -> dict:
     if down >= price:
         raise SystemExit(f"Down payment ({_money(down)}) must be less than price ({_money(price)}).")
 
-    region = data.get_params(args.postal)
+    use_live = bool(getattr(args, "live", False))
+    region = data.get_params(args.postal, live=use_live)
 
     # The scraper exposes data-named keys; the projection engine wants generic
     # keys. Map one to the other, letting explicit CLI flags override the region.
@@ -59,6 +60,7 @@ def build_engine_params(args: argparse.Namespace) -> dict:
         "down_payment": down,
         "postal_code": args.postal,
         "region_label": region.get("_region", "unknown"),
+        "live_meta": region.get("_live"),
         "mortgage_rate": _override(args.rate, region["current_5yr_fixed_rate"]),
         "appreciation_rate": _override(args.appreciation, region["home_appreciation_rate"]),
         "property_tax_rate": _override(args.property_tax_rate, region["property_tax_rate"]),
@@ -100,6 +102,11 @@ def _override(cli_value, default):
     return float(cli_value) if cli_value is not None else default
 
 
+def _env_flag(name: str) -> bool:
+    """Truthy reading of an on/off-style environment variable."""
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
 # --------------------------------------------------------------------------- #
 # Reporting
 # --------------------------------------------------------------------------- #
@@ -114,7 +121,10 @@ def print_report(params: dict, summary: dict, chart_paths: list[str]) -> None:
     print(f"  House price         : {_money(params['purchase_price'], sym)}")
     print(f"  Down payment        : {_money(params['down_payment'], sym)} "
           f"({params['down_payment'] / params['purchase_price'] * 100:.1f}%)")
-    print(f"  Mortgage term       : {T} years @ {params['mortgage_rate'] * 100:.2f}% fixed")
+    lm = params.get("live_meta")
+    live_note = (f"  [LIVE: {lm['source']}, as of {lm['as_of']}]"
+                 if lm and abs(params["mortgage_rate"] - lm["rate"]) < 1e-9 else "")
+    print(f"  Mortgage term       : {T} years @ {params['mortgage_rate'] * 100:.2f}% fixed{live_note}")
     print()
     print("  ASSUMPTIONS (regional, unless overridden):")
     print(f"    Home appreciation : {params['appreciation_rate'] * 100:.2f}%/yr")
@@ -208,6 +218,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-charts", action="store_true", help="Skip chart rendering; print summary only")
     p.add_argument("--no-sensitivity", action="store_true",
                    help="Skip the appreciation x return sensitivity heatmap (Chart 6)")
+    p.add_argument("--live", action="store_true",
+                   default=_env_flag("EVALUATOR_LIVE_DATA"),
+                   help="Overlay the live 5yr mortgage rate from the Bank of Canada "
+                        "(falls back to regional default if offline). "
+                        "Default from env EVALUATOR_LIVE_DATA.")
+    p.add_argument("--no-live", dest="live", action="store_false",
+                   help="Force the baked-in regional rate (disable live fetch)")
 
     # Tax layer: registered-account sheltering + capital-gains tax.
     t = p.add_argument_group("tax layer (registered accounts + capital gains)")

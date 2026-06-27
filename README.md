@@ -73,9 +73,20 @@ Every regional assumption can be overridden from the CLI (see `--help`):
 `--rate`, `--appreciation`, `--rent`, `--rent-growth`, `--property-tax-rate`,
 `--investment-return`, `--insurance`, `--hoa`.
 
-Postal codes in North York (FSAs `M2H/M2J/M2K/M2N`) use Toronto-specific data;
-all others fall back to Canada-wide defaults. Add more regions in
-`evaluator/data.py`.
+### Regional coverage & live data
+
+Postal-code routing (most specific first): North York FSAs (`M2H/M2J/M2K/M2N`)
+use Toronto-specific data; any other `M` code uses City-of-Toronto data (Toronto
+property tax + municipal land-transfer tax); the rest of **Ontario** (`K/L/N/P`)
+uses an Ontario-wide default tier; everything else falls back to Canada-wide
+defaults. Add more regions in `evaluator/data.py`.
+
+The **5-year mortgage rate is live**: with `--live` (CLI) or `EVALUATOR_LIVE_DATA`
+(web; on by default) the tool overlays the current discounted fixed rate derived
+from the **Bank of Canada Valet API** (5-yr Government of Canada benchmark yield +
+a lender spread). Results are cached (12h) and fall back to the baked-in regional
+rate if offline. See `evaluator/live.py`. Other inputs (appreciation, rent,
+property tax) are slow-moving researched constants per region.
 
 ## Run as a web service (Docker)
 

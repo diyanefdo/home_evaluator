@@ -52,6 +52,11 @@ _security = HTTPBasic(auto_error=False)
 _TRUTHY = {"1", "true", "yes", "on"}
 _FALSY = {"0", "false", "no", "off"}
 
+# Live market data (Bank of Canada 5yr mortgage rate). ON by default for the web
+# service; falls back to baked-in regional rates if offline. Disable with
+# EVALUATOR_LIVE_DATA=off.
+_LIVE_DATA = os.environ.get("EVALUATOR_LIVE_DATA", "on").strip().lower() not in _FALSY
+
 
 def _auth_enabled() -> bool:
     """Decide whether basic-auth is active, honouring the EVALUATOR_AUTH flag."""
@@ -179,6 +184,10 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
    text-transform:uppercase;color:var(--muted);margin-bottom:.22rem}
  .stat .v{display:block;font-size:1.05rem;font-weight:700;color:var(--ink);letter-spacing:-.01em}
  .stat .v small{font-weight:600;color:var(--muted);font-size:.8rem}
+ .live-badge{display:inline-block;margin-left:.4rem;padding:.05rem .4rem;border-radius:999px;
+   font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;vertical-align:middle;
+   color:#0a7d33;background:rgba(16,160,64,.14);border:1px solid rgba(16,160,64,.35)}
+ .live-badge::before{content:"\\25CF";margin-right:.25rem;color:#10a040;font-size:.7em}
 
  .charts{margin-top:.2rem}
  .chart-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
@@ -674,7 +683,7 @@ def _run_scenario(
         price=price, down=down, years=years, postal=postal,
         age=age, income=income, account_strategy=strategy, retirement_rate=retirement_rate,
         first_time_buyer=first_time, commission_rate=None, purchase_legal=None,
-        no_transaction_costs=False,
+        no_transaction_costs=False, live=_LIVE_DATA,
         rate=rate, appreciation=appreciation, rent=rent, rent_growth=rent_growth,
         property_tax_rate=property_tax_rate, investment_return=investment_return,
         insurance=insurance, hoa=hoa, out=None, no_charts=False,
@@ -725,9 +734,13 @@ def _result_fields(sc: dict) -> dict:
     sym = sc["sym"]
     years = sc["years"]
     tax_tag = " after tax" if sc["after_tax"] else ""
+    lm = params.get("live_meta")
+    rate_is_live = lm and abs(params["mortgage_rate"] - lm["rate"]) < 1e-9
+    rate_badge = (f' <span class="live-badge" title="Bank of Canada, as of {html.escape(lm["as_of"])}">live</span>'
+                  if rate_is_live else "")
     stats = {
         "down": f'{sym}{params["down_payment"]:,.0f} <small>({sc["pct"]:.0f}%)</small>',
-        "mortgage": f'{years} yr <small>@ {params["mortgage_rate"] * 100:.2f}%</small>',
+        "mortgage": f'{years} yr <small>@ {params["mortgage_rate"] * 100:.2f}%</small>{rate_badge}',
         "crossover": sc["cross"],
         "renter_tax": f'{sym}{summary.get("renter_tax_paid", 0):,.0f}',
         "buy_costs": (f'{sym}{summary.get("purchase_closing_costs", 0):,.0f} '

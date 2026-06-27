@@ -12,6 +12,9 @@ services:
       - EVALUATOR_AUTH=${EVALUATOR_AUTH:-}
       - EVALUATOR_USER=${EVALUATOR_USER:-admin}
       - EVALUATOR_PASSWORD=${EVALUATOR_PASSWORD:-}
+      # Live 5yr mortgage rate from the Bank of Canada (on by default; falls back
+      # to baked-in regional rates if offline). Set to "off" to disable.
+      - EVALUATOR_LIVE_DATA=${EVALUATOR_LIVE_DATA:-on}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
