@@ -122,6 +122,28 @@ Endpoints: `/` (form), `/evaluate?price=1000000&down=200000&years=30&postal=M2J+
 Cloudflare Tunnel, or ngrok) — including WSL2 notes — see
 [`knowledge/DOCKER_PRIVATE_DEPLOYMENT.md`](knowledge/DOCKER_PRIVATE_DEPLOYMENT.md).
 
+### Accounts (Postgres + Google sign-in)
+
+`docker compose` also starts a **PostgreSQL** container (separate service `db`,
+data on a named volume `evaluator-pgdata`). The app connects via `EVALUATOR_DB`
+and creates its tables on startup. This is entirely **opt-in and additive** — the
+tool works fully signed-out; accounts just add a "Sign in with Google" widget
+(foundation for saved scenarios / history later).
+
+Sign-in turns on only when **both** Google OAuth credentials are set (along with
+the DB). To enable it:
+
+1. Create an OAuth 2.0 **Web application** client at
+   [Google Cloud → Credentials](https://console.cloud.google.com/apis/credentials),
+   with an authorized redirect URI of `<your-base-url>/auth/google/callback`.
+2. Copy `.env.example` to `.env` and fill in `GOOGLE_CLIENT_ID`,
+   `GOOGLE_CLIENT_SECRET`, a random `EVALUATOR_SECRET_KEY`, and (behind a proxy/
+   Tailscale Funnel) `EVALUATOR_OAUTH_REDIRECT`. Change `POSTGRES_PASSWORD`.
+3. `docker compose up -d --build`. `/healthz` reports `{"accounts": true, "db": true}`.
+
+New endpoints when enabled: `/login`, `/auth/google/callback`, `/logout`. Without
+the deps or env, the app degrades gracefully to the stateless tool.
+
 ## Data vintage & caveats
 
 Regional figures were gathered 2026-06-25 (sources cited in `evaluator/data.py`).

@@ -21,12 +21,22 @@ import json
 import os
 import secrets
 
-from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 
 from evaluator import cli, projections, tax
+
+# Optional Phase 2 stack (persistence + Google OAuth). Imported defensively so the
+# app still runs as a stateless tool when the extra deps aren't installed.
+try:
+    from starlette.middleware.sessions import SessionMiddleware
+    from authlib.integrations.starlette_client import OAuth, OAuthError
+    from evaluator import db as eval_db, accounts
+    _ACCOUNTS_IMPORTABLE = True
+except Exception:  # noqa: BLE001 - any import problem just disables accounts
+    _ACCOUNTS_IMPORTABLE = False
 
 app = FastAPI(title="Canadian Buy-vs-Rent Home Evaluator")
 
@@ -56,6 +66,80 @@ _FALSY = {"0", "false", "no", "off"}
 # service; falls back to baked-in regional rates if offline. Disable with
 # EVALUATOR_LIVE_DATA=off.
 _LIVE_DATA = os.environ.get("EVALUATOR_LIVE_DATA", "on").strip().lower() not in _FALSY
+
+# --------------------------------------------------------------------------- #
+# Accounts (Phase 2): PostgreSQL persistence + Google OAuth sign-in.
+#
+# Fully opt-in and additive — the tool stays usable signed-out. Accounts light up
+# only when the deps are installed, EVALUATOR_DB is set, and the Google client
+# credentials are provided:
+#   EVALUATOR_DB            postgresql+psycopg://eval:pass@db:5432/evaluator
+#   GOOGLE_CLIENT_ID        from a Google Cloud OAuth 2.0 client
+#   GOOGLE_CLIENT_SECRET
+#   EVALUATOR_SECRET_KEY    signs the session cookie (set one in prod!)
+#   EVALUATOR_OAUTH_REDIRECT  optional explicit callback URL (behind a proxy)
+# --------------------------------------------------------------------------- #
+_DB_ON = _ACCOUNTS_IMPORTABLE and eval_db.db_enabled()
+_GOOGLE_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+_GOOGLE_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
+_OAUTH_ON = bool(_DB_ON and _GOOGLE_ID and _GOOGLE_SECRET)
+_SECRET_KEY = os.environ.get("EVALUATOR_SECRET_KEY", "").strip() or secrets.token_hex(32)
+
+_oauth = None
+if _OAUTH_ON:
+    _oauth = OAuth()
+    _oauth.register(
+        name="google",
+        client_id=_GOOGLE_ID,
+        client_secret=_GOOGLE_SECRET,
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_kwargs={"scope": "openid email profile"},
+    )
+
+# Signed-cookie sessions back the login state (needed for the OAuth handshake).
+if _ACCOUNTS_IMPORTABLE:
+    app.add_middleware(SessionMiddleware, secret_key=_SECRET_KEY,
+                       same_site="lax", https_only=False)
+
+
+@app.on_event("startup")
+def _startup_init_db() -> None:
+    """Create tables on boot when persistence is enabled (best-effort)."""
+    if _DB_ON:
+        try:
+            eval_db.init_db()
+        except Exception as exc:  # noqa: BLE001 - log and continue; tool still works
+            print(f"[warn] database init failed ({exc}); accounts disabled this run.")
+
+
+def _current_user(request: Request) -> dict | None:
+    """The signed-in user (dict) for this request, or None."""
+    if not _DB_ON:
+        return None
+    uid = request.session.get("user_id")
+    if not uid:
+        return None
+    try:
+        return accounts.get_user(uid)
+    except Exception:  # noqa: BLE001 - DB hiccup shouldn't break page rendering
+        return None
+
+
+def _auth_bar(user: dict | None) -> str:
+    """Top-right sign-in / signed-in widget. Empty when accounts are disabled."""
+    if not _OAUTH_ON:
+        return ""
+    if user:
+        who = html.escape(user.get("name") or user.get("email") or "Account")
+        return (f'<div class="authbar"><span class="who">{who}</span>'
+                f'<a class="authbtn" href="/logout">Sign out</a></div>')
+    return ('<div class="authbar">'
+            '<a class="authbtn" href="/login">Sign in with Google</a></div>')
+
+
+def _page(page_html: str, user: dict | None) -> str:
+    """Inject the auth widget just inside <body> for a rendered page."""
+    return page_html.replace("<body>", "<body>" + _auth_bar(user), 1)
 
 
 def _auth_enabled() -> bool:
@@ -293,6 +377,17 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
    .rb-art svg,.reveal{animation:none}
    .reveal{opacity:1}
  }
+ /* account sign-in widget (top-right) */
+ .authbar{position:fixed;top:.8rem;right:.9rem;z-index:50;display:flex;
+   align-items:center;gap:.6rem;font-size:.82rem}
+ .authbar .who{color:var(--ink);background:var(--card);border:1px solid var(--line);
+   padding:.3rem .7rem;border-radius:999px;font-weight:600;
+   box-shadow:0 2px 8px rgba(8,40,64,.08)}
+ .authbar .authbtn{display:inline-block;padding:.36rem .8rem;border-radius:999px;
+   font-weight:700;text-decoration:none;color:#fff;background:var(--brand);
+   border:1px solid rgba(8,40,64,.18);box-shadow:0 2px 8px rgba(8,40,64,.18)}
+ .authbar .authbtn:hover{filter:brightness(1.07)}
+ @media (max-width:480px){ .authbar{top:.5rem;right:.5rem;font-size:.76rem} }
 </style></head><body>"""
 
 PAGE_FOOT = "</body></html>"
@@ -771,17 +866,57 @@ def _result_fields(sc: dict) -> dict:
 
 
 @app.get("/", response_class=HTMLResponse)
-def home(_: None = Depends(require_auth)) -> str:
-    return FORM
+def home(request: Request, _: None = Depends(require_auth)) -> str:
+    return _page(FORM, _current_user(request))
 
 
 @app.get("/healthz")
 def healthz() -> dict:
-    return {"status": "ok"}
+    return {"status": "ok", "accounts": _OAUTH_ON, "db": _DB_ON}
+
+
+# --------------------------------------------------------------------------- #
+# Google OAuth sign-in (only registered when accounts are enabled).
+# --------------------------------------------------------------------------- #
+@app.get("/login")
+async def login(request: Request):
+    if not _OAUTH_ON:
+        raise HTTPException(status_code=404, detail="Accounts are not enabled.")
+    redirect_uri = (os.environ.get("EVALUATOR_OAUTH_REDIRECT", "").strip()
+                    or str(request.url_for("auth_google")))
+    return await _oauth.google.authorize_redirect(request, redirect_uri)
+
+
+@app.get("/auth/google/callback", name="auth_google")
+async def auth_google(request: Request):
+    if not _OAUTH_ON:
+        raise HTTPException(status_code=404, detail="Accounts are not enabled.")
+    try:
+        token = await _oauth.google.authorize_access_token(request)
+    except OAuthError:
+        return RedirectResponse(url="/?login=failed")
+    info = token.get("userinfo") or {}
+    sub = info.get("sub")
+    if not sub:
+        return RedirectResponse(url="/?login=failed")
+    user = accounts.upsert_google_user(
+        google_sub=sub, email=info.get("email", ""),
+        name=info.get("name"), picture=info.get("picture"),
+    )
+    request.session["user_id"] = user["id"]
+    return RedirectResponse(url="/")
+
+
+@app.get("/logout")
+def logout(request: Request):
+    if _ACCOUNTS_IMPORTABLE:
+        request.session.clear()
+    return RedirectResponse(url="/")
 
 
 @app.get("/evaluate", response_class=HTMLResponse)
 def evaluate(
+    request: Request,
     price: float,
     down: str = "20%",
     years: int = 30,
@@ -938,7 +1073,7 @@ def evaluate(
         + script
         + PAGE_FOOT
     )
-    return HTMLResponse(body)
+    return HTMLResponse(_page(body, _current_user(request)))
 
 
 @app.get("/api/recompute")

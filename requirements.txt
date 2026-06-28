@@ -2,3 +2,9 @@ numpy
 matplotlib
 fastapi
 uvicorn[standard]
+# Phase 2 — persistence + accounts (Google OAuth)
+sqlmodel
+psycopg[binary]
+authlib
+httpx
+itsdangerous

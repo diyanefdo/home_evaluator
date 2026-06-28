@@ -32,8 +32,8 @@ it's a menu to prioritize from.
 
 | Idea | What | Effort | Impact |
 |------|------|--------|--------|
-| **Persistence layer** | Add a database. **Decision: use PostgreSQL in its own container** (a separate `db` service in `docker-compose.yml`, reached over the compose network by service name, with a named volume for `/var/lib/postgresql/data` so it survives rebuilds). The app connects via an `EVALUATOR_DB` URL (`postgresql://…@db:5432/…`) and `depends_on: db`. Use SQLModel/SQLAlchemy so models stay DB-agnostic. (SQLite was considered but rejected in favour of Postgres for concurrent writes and a clean path to scale.) | M | Foundational |
-| **User accounts** | Replace basic-auth with real accounts (email + password, or magic-link, or OAuth via Google — the deploy already has a Google identity). Sessions via signed cookies. | M | High |
+| **Persistence layer** ✅ | **DONE.** PostgreSQL in its own container (`db` service, named volume `evaluator-pgdata`, `depends_on: service_healthy`). App connects via `EVALUATOR_DB` (`postgresql+psycopg://…@db:5432/…`); `evaluator/db.py` creates tables on startup via SQLModel. Fully opt-in — unset `EVALUATOR_DB` ⇒ stateless as before. | M | Foundational |
+| **User accounts** ✅ | **DONE (Google OAuth).** Sign-in via Authlib + signed-cookie sessions; `User` model keyed by Google `sub` (`evaluator/models.py` / `accounts.py`); `/login`, `/auth/google/callback`, `/logout` + a top-right auth widget. Additive (basic-auth untouched); lights up only when `GOOGLE_CLIENT_ID/SECRET` + DB are set. **Next:** gate saved data behind login. | M | High |
 | **Saved scenarios** | Logged-in users can name and save a scenario (all inputs + a snapshot of the result). List, reopen, edit, delete. | M | High |
 | **Scenario history / "my runs"** | Auto-save every evaluation to the user's history with a timestamp; let them revisit or re-run. | S–M | Medium |
 | **Compare scenarios** | Pick 2–4 saved scenarios and render them side-by-side (e.g. buy-now vs wait-2-years, 20% vs 35% down, two neighbourhoods). | M | High |
@@ -288,8 +288,8 @@ A pragmatic order that front-loads value and respects dependencies:
 - Methodology/transparency page + clearer disclaimers. *(remaining)*
 
 **Phase 2 — Go stateful (the platform shift)**
-- PostgreSQL in a separate container (volume-mounted) + real accounts (Google OAuth).
-- Saved scenarios, run history, shareable links.
+- ✅ PostgreSQL in a separate container (volume-mounted) + real accounts (Google OAuth).
+- Saved scenarios, run history, shareable links. *(next)*
 - Basic usage analytics / admin dashboard.
 
 **Phase 3 — Live market data (the wow factor)**

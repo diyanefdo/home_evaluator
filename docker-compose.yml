@@ -15,9 +15,39 @@ services:
       # Live 5yr mortgage rate from the Bank of Canada (on by default; falls back
       # to baked-in regional rates if offline). Set to "off" to disable.
       - EVALUATOR_LIVE_DATA=${EVALUATOR_LIVE_DATA:-on}
+      # --- Phase 2: accounts (Postgres + Google OAuth) --------------------------
+      # Persistence: points at the `db` service below. Accounts stay OFF until the
+      # Google client credentials are also provided.
+      - EVALUATOR_DB=${EVALUATOR_DB:-postgresql+psycopg://eval:${POSTGRES_PASSWORD:-evalpass}@db:5432/evaluator}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - EVALUATOR_SECRET_KEY=${EVALUATOR_SECRET_KEY:-}
+      - EVALUATOR_OAUTH_REDIRECT=${EVALUATOR_OAUTH_REDIRECT:-}
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+  db:
+    image: postgres:16
+    container_name: home-evaluator-db
+    environment:
+      - POSTGRES_USER=eval
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-evalpass}
+      - POSTGRES_DB=evaluator
+    volumes:
+      - evaluator-pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eval -d evaluator"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  evaluator-pgdata:
