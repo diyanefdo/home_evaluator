@@ -497,3 +497,15 @@ do cmhc insurance for <20%down
 ## 2026-06-28 11:55:28
 
 commit and push
+
+## 2026-06-28 11:55:58
+
+if i was to have a databsae to store user data and stuff would it run in a sepereate docker instance
+
+## 2026-06-28 11:58:27
+
+modeify the notes to indicate that i want to use a seperate container postgres database
+
+## 2026-06-28 11:59:14
+
+commit and push
