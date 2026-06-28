@@ -485,3 +485,15 @@ Memory updated: `/home/diyanefdo/home_evaluator/.claude/agent-memory/canada-hous
 ## 2026-06-28 11:47:11
 
 commit and push
+
+## 2026-06-28 11:48:22
+
+what else is remaining to do in phase 1
+
+## 2026-06-28 11:49:09
+
+do cmhc insurance for <20%down
+
+## 2026-06-28 11:55:28
+
+commit and push
