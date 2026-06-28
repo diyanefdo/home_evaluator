@@ -541,3 +541,24 @@ yes
 ## 2026-06-28 15:47:21
 
 yes
+
+## 2026-06-28 15:55:38
+
+can you give me a authorized redirect URI for my tailscale website to use in google oAuth
+
+## 2026-06-28 16:01:20
+
+You can't sign in because this app sent an invalid request. You can try again later, or contact the developer about this issue. Learn more about this error
+If you are a developer of this app, see error details.
+Error 400: redirect_uri_mismatch
+
+## 2026-06-28 16:16:31
+
+You can't sign in to this app because it doesn't comply with Google's OAuth 2.0 policy.
+
+If you're the app developer, register the redirect URI in the Google Cloud Console.
+Request details: redirect_uri=http://diyanepc.taild6001d.ts.net/auth/google/callback flowName=GeneralOAuthFlow
+
+## 2026-06-28 16:19:46
+
+commit and push any outstanding changes
