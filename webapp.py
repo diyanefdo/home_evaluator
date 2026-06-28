@@ -33,10 +33,12 @@ from evaluator import cli, projections, tax
 try:
     from starlette.middleware.sessions import SessionMiddleware
     from authlib.integrations.starlette_client import OAuth, OAuthError
-    from evaluator import db as eval_db, accounts
+    from evaluator import db as eval_db, accounts, scenarios
     _ACCOUNTS_IMPORTABLE = True
 except Exception:  # noqa: BLE001 - any import problem just disables accounts
     _ACCOUNTS_IMPORTABLE = False
+
+from pydantic import BaseModel
 
 app = FastAPI(title="Canadian Buy-vs-Rent Home Evaluator")
 
@@ -132,6 +134,7 @@ def _auth_bar(user: dict | None) -> str:
     if user:
         who = html.escape(user.get("name") or user.get("email") or "Account")
         return (f'<div class="authbar"><span class="who">{who}</span>'
+                f'<a class="authbtn ghost" href="/scenarios">My scenarios</a>'
                 f'<a class="authbtn" href="/logout">Sign out</a></div>')
     return ('<div class="authbar">'
             '<a class="authbtn" href="/login">Sign in with Google</a></div>')
@@ -140,6 +143,77 @@ def _auth_bar(user: dict | None) -> str:
 def _page(page_html: str, user: dict | None) -> str:
     """Inject the auth widget just inside <body> for a rendered page."""
     return page_html.replace("<body>", "<body>" + _auth_bar(user), 1)
+
+
+# Inputs we accept for a saved scenario (everything /evaluate understands).
+_STR_INPUTS = ("down", "postal", "strategy")
+_INT_INPUTS = ("years", "age")
+_FLOAT_INPUTS = ("price", "income", "rate", "appreciation", "rent", "rent_growth",
+                 "property_tax_rate", "investment_return", "insurance", "hoa",
+                 "retirement_rate")
+
+
+def _sanitize_inputs(raw: dict) -> dict:
+    """Whitelist + coerce the inputs that reproduce an evaluation."""
+    out: dict = {}
+    for k in _STR_INPUTS:
+        if raw.get(k) not in (None, ""):
+            out[k] = str(raw[k])
+    for k in _INT_INPUTS:
+        if raw.get(k) not in (None, ""):
+            out[k] = int(raw[k])
+    for k in _FLOAT_INPUTS:
+        if raw.get(k) not in (None, ""):
+            out[k] = float(raw[k])
+    if "first_time" in raw:
+        out["first_time"] = bool(raw["first_time"]) and str(raw["first_time"]).lower() not in _FALSY
+    return out
+
+
+def _run_from_inputs(inputs: dict) -> dict:
+    """Run a scenario from a saved/sanitized inputs dict (raises ValueError)."""
+    return _run_scenario(
+        price=float(inputs["price"]),
+        down=str(inputs.get("down", "20%")),
+        years=int(inputs.get("years", 30)),
+        postal=str(inputs.get("postal", "M2J 0E8")),
+        age=int(inputs.get("age", 35)),
+        income=float(inputs.get("income", 120000.0)),
+        strategy=str(inputs.get("strategy", "shelter-first")),
+        first_time=bool(inputs.get("first_time", False)),
+        rate=inputs.get("rate"), appreciation=inputs.get("appreciation"),
+        rent=inputs.get("rent"), rent_growth=inputs.get("rent_growth"),
+        property_tax_rate=inputs.get("property_tax_rate"),
+        investment_return=inputs.get("investment_return"),
+        insurance=float(inputs.get("insurance", 1500.0)),
+        hoa=float(inputs.get("hoa", 0.0)),
+        retirement_rate=inputs.get("retirement_rate"),
+    )
+
+
+def _snapshot(sc: dict) -> dict:
+    """A light, recompute-free summary stored alongside a scenario."""
+    sym = sc["sym"]
+    return {
+        "verdict_word": ("Buying" if sc["leader"] == "buyer" else "Renting"),
+        "leader": sc["leader"],
+        "gap_str": f'{sym}{abs(sc["gap"]):,.0f}',
+        "after_tax": bool(sc["after_tax"]),
+        "region": sc["params"]["region_label"],
+        "postal": sc["params"]["postal_code"],
+        "years": sc["years"],
+    }
+
+
+def _scenario_query(inputs: dict, sid: int | None = None) -> str:
+    """Build the /evaluate query string that reopens a saved scenario."""
+    from urllib.parse import urlencode
+    q = {}
+    for k, v in inputs.items():
+        q[k] = str(v).lower() if isinstance(v, bool) else v
+    if sid is not None:
+        q["sid"] = sid
+    return urlencode(q)
 
 
 def _auth_enabled() -> bool:
@@ -387,7 +461,41 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
    font-weight:700;text-decoration:none;color:#fff;background:var(--brand);
    border:1px solid rgba(8,40,64,.18);box-shadow:0 2px 8px rgba(8,40,64,.18)}
  .authbar .authbtn:hover{filter:brightness(1.07)}
- @media (max-width:480px){ .authbar{top:.5rem;right:.5rem;font-size:.76rem} }
+ .authbar .authbtn.ghost{background:var(--card);color:var(--brand);
+   border:1px solid var(--line)}
+ @media (max-width:480px){ .authbar{top:.5rem;right:.5rem;font-size:.72rem;gap:.4rem}
+   .authbar .who{display:none} }
+ /* save-scenario panel (results page) */
+ .savebox{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;
+   background:var(--card);border:1px solid var(--line);border-radius:14px;
+   padding:.9rem 1.1rem;margin:.2rem 0 .6rem;box-shadow:0 6px 18px rgba(8,40,64,.06)}
+ .savebox h2{font-size:1rem;margin:0;color:var(--ink);flex:0 0 auto}
+ .savebox input[type=text]{flex:1 1 200px;min-width:140px;padding:.5rem .7rem;
+   border:1px solid var(--line);border-radius:10px;font-size:15px;background:#fbfdff}
+ .savebox button{padding:.55rem 1.1rem;border:0;border-radius:10px;cursor:pointer;
+   font-weight:700;color:#fff;background:var(--brand)}
+ .savebox button:hover{filter:brightness(1.07)}
+ .savebox .save-status{font-size:.85rem;color:var(--muted)}
+ .savebox .save-status.ok{color:#0a7d33}
+ .savebox .save-status.err{color:#c0392b}
+ /* scenarios list page */
+ .scen-list{display:grid;gap:.85rem;margin:1.2rem 0}
+ .scen-card{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;
+   background:var(--card);border:1px solid var(--line);border-radius:14px;
+   padding:1rem 1.2rem;box-shadow:0 4px 14px rgba(8,40,64,.05)}
+ .scen-card .scen-main{flex:1 1 260px;min-width:0}
+ .scen-card .scen-name{font-weight:700;color:var(--ink);font-size:1.05rem}
+ .scen-card .scen-meta{color:var(--muted);font-size:.85rem;margin-top:.2rem}
+ .scen-card .scen-verdict{font-weight:700}
+ .scen-card .scen-actions{display:flex;gap:.5rem;flex-wrap:wrap}
+ .scen-card .scen-actions a,.scen-card .scen-actions button{
+   padding:.42rem .8rem;border-radius:9px;font-size:.85rem;font-weight:700;
+   text-decoration:none;cursor:pointer;border:1px solid var(--line);background:#fbfdff;color:var(--brand)}
+ .scen-card .scen-actions .open{background:var(--brand);color:#fff;border-color:var(--brand)}
+ .scen-card .scen-actions .del{color:#c0392b}
+ .scen-empty{color:var(--muted);background:var(--card);border:1px dashed var(--line);
+   border-radius:14px;padding:2rem;text-align:center;margin:1.2rem 0}
+ .scen-form{display:inline}
 </style></head><body>"""
 
 PAGE_FOOT = "</body></html>"
@@ -441,6 +549,32 @@ function wfOnInput(){wfLabels();clearTimeout(WF_T);WF_T=setTimeout(wfRecompute,3
   var el=document.getElementById('s-'+k); if(el) el.addEventListener('input', wfOnInput);
 });
 wfLabels();
+"""
+
+# Save-scenario behaviour. SCEN_ID + SAVE_INPUTS are injected per result; the save
+# captures the *current* slider state so tweaks are stored faithfully.
+SAVE_SCRIPT_BODY = """
+function saveScenario(){
+  var inp=Object.assign({}, SAVE_INPUTS);
+  var g=function(id){var e=document.getElementById(id);return e?e.value:null;};
+  if(g('s-down')!=null) inp.down=g('s-down')+'%';
+  if(g('s-rate')!=null) inp.rate=g('s-rate')/100;
+  if(g('s-appr')!=null) inp.appreciation=g('s-appr')/100;
+  if(g('s-ret')!=null) inp.investment_return=g('s-ret')/100;
+  if(g('s-rent')!=null) inp.rent=g('s-rent');
+  var name=(g('scen-name')||'').trim();
+  var st=document.getElementById('save-status');
+  if(!name){st.className='save-status err';st.textContent='Name it first';return;}
+  st.className='save-status';st.textContent='Saving\\u2026';
+  fetch('/api/scenarios',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name:name,inputs:inp,id:SCEN_ID})})
+   .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+   .then(function(res){
+     if(res.ok&&res.d.ok){st.className='save-status ok';st.textContent='Saved \\u2713';
+       SCEN_ID=res.d.id;document.getElementById('save-btn').textContent='Update scenario';}
+     else{st.className='save-status err';st.textContent=(res.d.detail||'Could not save');}
+   }).catch(function(){st.className='save-status err';st.textContent='Could not save';});
+}
 """
 
 # Interactive chart rendering with the vendored Plotly. renderCharts(d) is global
@@ -914,6 +1048,126 @@ def logout(request: Request):
     return RedirectResponse(url="/")
 
 
+# --------------------------------------------------------------------------- #
+# Saved scenarios (require a signed-in user; 404 when accounts are disabled).
+# --------------------------------------------------------------------------- #
+class ScenarioIn(BaseModel):
+    name: str
+    inputs: dict
+    id: int | None = None
+
+
+def _require_login(request: Request) -> dict:
+    """Return the signed-in user or raise (404 if accounts off, 401 if not signed in)."""
+    if not _DB_ON:
+        raise HTTPException(status_code=404, detail="Accounts are not enabled.")
+    user = _current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in to use saved scenarios.")
+    return user
+
+
+@app.post("/api/scenarios")
+def save_scenario(payload: ScenarioIn, request: Request):
+    user = _require_login(request)
+    name = (payload.name or "").strip()[:120]
+    if not name:
+        raise HTTPException(status_code=400, detail="Please give the scenario a name.")
+    try:
+        inputs = _sanitize_inputs(payload.inputs)
+        if "price" not in inputs:
+            raise ValueError("missing price")
+        sc = _run_from_inputs(inputs)          # validates inputs + builds snapshot
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=f"Could not save: {exc}")
+    snap = _snapshot(sc)
+    if payload.id is not None:
+        row = scenarios.update(payload.id, user["id"], name=name, inputs=inputs, snapshot=snap)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Scenario not found.")
+    else:
+        row = scenarios.create(user["id"], name, inputs, snap)
+    return {"ok": True, "id": row["id"], "name": row["name"]}
+
+
+@app.get("/scenarios", response_class=HTMLResponse)
+def scenarios_list(request: Request):
+    user = _require_login(request)
+    rows = scenarios.list_for_user(user["id"])
+    if rows:
+        cards = ""
+        for r in rows:
+            snap = r.get("snapshot") or {}
+            verdict = html.escape(snap.get("verdict_word", "—"))
+            gap = html.escape(snap.get("gap_str", ""))
+            tax_tag = " after tax" if snap.get("after_tax") else ""
+            region = html.escape(snap.get("region", ""))
+            updated = html.escape((r.get("updated_at") or "")[:10])
+            nm = html.escape(r["name"])
+            cards += (
+                '<div class="scen-card">'
+                '<div class="scen-main">'
+                f'<div class="scen-name">{nm}</div>'
+                f'<div class="scen-meta"><span class="scen-verdict">{verdict} ahead by {gap}'
+                f'{tax_tag}</span> &middot; {region} &middot; saved {updated}</div>'
+                '</div>'
+                '<div class="scen-actions">'
+                f'<a class="open" href="/scenarios/{r["id"]}/open">Open</a>'
+                f'<form class="scen-form" method="post" '
+                f'data-base="/scenarios/{r["id"]}/rename" data-name="{nm}" '
+                'onsubmit="var n=prompt(\'Rename scenario:\',this.dataset.name);'
+                'if(n===null||!n.trim())return false;'
+                'this.action=this.dataset.base+\'?name=\'+encodeURIComponent(n.trim());return true;">'
+                '<button type="submit">Rename</button></form>'
+                f'<form class="scen-form" method="post" action="/scenarios/{r["id"]}/delete" '
+                'onsubmit="return confirm(\'Delete this scenario?\');">'
+                '<button class="del" type="submit">Delete</button></form>'
+                '</div>'
+                '</div>'
+            )
+        body_inner = f'<div class="scen-list">{cards}</div>'
+    else:
+        body_inner = ('<div class="scen-empty">No saved scenarios yet. Run an '
+                      'evaluation, then use <b>Save scenario</b> on the results page.</div>')
+    body = (
+        PAGE_HEAD
+        + '<section class="hero"><div class="hero-copy">'
+        + '<span class="eyebrow"><span class="dot"></span> Your account</span>'
+        + '<h1>Saved scenarios</h1>'
+        + '<p>Reopen, rename, or delete the scenarios you\'ve saved.</p>'
+        + '</div></section>'
+        + body_inner
+        + '<p><a class="back" href="/">&larr; New evaluation</a></p>'
+        + PAGE_FOOT
+    )
+    return HTMLResponse(_page(body, user))
+
+
+@app.get("/scenarios/{scenario_id}/open")
+def scenario_open(scenario_id: int, request: Request):
+    user = _require_login(request)
+    row = scenarios.get(scenario_id, user["id"])
+    if row is None:
+        raise HTTPException(status_code=404, detail="Scenario not found.")
+    return RedirectResponse(url="/evaluate?" + _scenario_query(row["inputs"], scenario_id))
+
+
+@app.post("/scenarios/{scenario_id}/rename")
+def scenario_rename(scenario_id: int, request: Request, name: str = ""):
+    user = _require_login(request)
+    new_name = (name or "").strip()[:120]
+    if new_name:
+        scenarios.update(scenario_id, user["id"], name=new_name)
+    return RedirectResponse(url="/scenarios", status_code=303)
+
+
+@app.post("/scenarios/{scenario_id}/delete")
+def scenario_delete(scenario_id: int, request: Request):
+    user = _require_login(request)
+    scenarios.delete(scenario_id, user["id"])
+    return RedirectResponse(url="/scenarios", status_code=303)
+
+
 @app.get("/evaluate", response_class=HTMLResponse)
 def evaluate(
     request: Request,
@@ -936,6 +1190,7 @@ def evaluate(
     insurance: float = 1500.0,
     hoa: float = 0.0,
     retirement_rate: float | None = None,
+    sid: int | None = None,   # set when reopening a saved scenario (for "Update")
     _: None = Depends(require_auth),
 ):
     try:
@@ -1052,18 +1307,60 @@ def evaluate(
         "income": income, "strategy": strategy,
         "first_time": "true" if first_time else "false",
     })
+
+    # Save-scenario panel + script, only for signed-in users.
+    user = _current_user(request)
+    savebox, save_script = "", ""
+    if user:
+        save_inputs: dict = {
+            "price": price, "down": down, "years": sc["years"], "postal": postal,
+            "age": age, "income": income, "strategy": strategy, "first_time": first_time,
+        }
+        for k, v in (("rate", rate), ("appreciation", appreciation), ("rent", rent),
+                     ("rent_growth", rent_growth), ("property_tax_rate", property_tax_rate),
+                     ("investment_return", investment_return), ("retirement_rate", retirement_rate)):
+            if v is not None:
+                save_inputs[k] = v
+        if insurance != 1500.0:
+            save_inputs["insurance"] = insurance
+        if hoa != 0.0:
+            save_inputs["hoa"] = hoa
+
+        sid_name = ""
+        if sid is not None:
+            existing = scenarios.get(sid, user["id"])
+            if existing:
+                sid_name = existing["name"]
+        btn_label = "Update scenario" if sid_name else "Save scenario"
+        savebox = (
+            '<section class="savebox">'
+            '<h2>Save scenario</h2>'
+            f'<input type="text" id="scen-name" maxlength="120" placeholder="Name this scenario" '
+            f'value="{html.escape(sid_name)}">'
+            f'<button id="save-btn" type="button" onclick="saveScenario()">{btn_label}</button>'
+            '<span class="save-status" id="save-status"></span>'
+            '</section>'
+        )
+        save_script = (
+            "var SCEN_ID=" + (str(int(sid)) if sid is not None else "null") + ";\n"
+            "var SAVE_INPUTS=" + json.dumps(save_inputs) + ";\n"
+            + SAVE_SCRIPT_BODY + "\n"
+        )
+
     script = (
         '<script src="/static/plotly.min.js"></script>'
         "<script>\n"
         "var CHART_DATA=" + json.dumps(sc["chart_data"]) + ";\n"
         "var BASE=" + base_js + ";\n"
         + CHARTS_SCRIPT_BODY + "\n"
-        + WHATIF_SCRIPT_BODY + "\n</script>"
+        + WHATIF_SCRIPT_BODY + "\n"
+        + save_script + "</script>"
     )
 
     body = (
         PAGE_HEAD
         + banner
+        + savebox
         + stats
         + whatif
         + imgs
@@ -1073,7 +1370,7 @@ def evaluate(
         + script
         + PAGE_FOOT
     )
-    return HTMLResponse(_page(body, _current_user(request)))
+    return HTMLResponse(_page(body, user))
 
 
 @app.get("/api/recompute")

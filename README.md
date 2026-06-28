@@ -147,6 +147,11 @@ troubleshooting):** [`knowledge/GOOGLE_OAUTH_SETUP.md`](knowledge/GOOGLE_OAUTH_S
 New endpoints when enabled: `/login`, `/auth/google/callback`, `/logout`. Without
 the deps or env, the app degrades gracefully to the stateless tool.
 
+**Saved scenarios:** signed-in users get a **Save scenario** panel on the results
+page (it captures the current what-if slider state) and a **My scenarios** page
+(`/scenarios`) to reopen, rename, or delete saved runs. Each scenario stores its
+inputs plus a small result snapshot; reopening re-runs it via `/evaluate?…&sid=`.
+
 ## Data vintage & caveats
 
 Regional figures were gathered 2026-06-25 (sources cited in `evaluator/data.py`).
