@@ -566,3 +566,11 @@ commit and push any outstanding changes
 ## 2026-06-28 16:22:46
 
 you can commit and push that too its ok
+
+## 2026-06-28 16:25:40
+
+can you work on this now: Saved scenarios    Logged-in users can name and save a scenario (all inputs + a snapshot of the result). List, reopen, edit, delete.
+
+## 2026-06-28 17:22:15
+
+commit and push
