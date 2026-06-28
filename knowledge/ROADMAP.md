@@ -280,10 +280,12 @@ most are existing roadmap items, now framed as paid value:
 A pragmatic order that front-loads value and respects dependencies:
 
 **Phase 1 — Finish the model + de-risk (low effort, high trust)**
-- ✅ Sensitivity grid (#6) — done (Chart 6). Terminal value (#5) still to do.
-- Live mortgage rates + CMHC insurance for <20% down.
-- Automated tests + CI for the engine.
-- Methodology/transparency page + clearer disclaimers.
+- ✅ Sensitivity grid (#6) — done (Chart 6). Terminal value (#5) — out of scope.
+- ✅ Live mortgage rates — done (Bank of Canada Valet, Theme 2).
+- ✅ CMHC default insurance for <20% down — done (`tax.cmhc_insurance`; premium
+  financed into the loan, PST up front, >$1.5M / below-minimum-down rejected).
+- Automated tests + CI for the engine. *(remaining)*
+- Methodology/transparency page + clearer disclaimers. *(remaining)*
 
 **Phase 2 — Go stateful (the platform shift)**
 - SQLite persistence (volume-mounted) + real accounts (Google OAuth).

@@ -43,6 +43,12 @@ a lower retirement rate (`--retirement-rate`, default `0.30`).
 (Ontario provincial + Toronto municipal for North York FSAs; ~$33k on a $1M home)
 plus legal/inspection, and **realtor commission + HST** at sale (~5% + 13%). Use
 `--first-time-buyer` for LTT rebates, or `--no-transaction-costs` to exclude them.
+
+**CMHC mortgage default insurance** kicks in automatically when the down payment
+is under 20% (a high-ratio mortgage): the premium (0.6–4.0% of the loan, by
+loan-to-value) is financed into the mortgage principal, and the Ontario PST on it
+is paid up front. Homes over $1.5M (or below the CMHC minimum down payment) can't
+be insured, so a sub-20% down payment there is rejected.
 See [`knowledge/METHODOLOGY_GAPS.md`](knowledge/METHODOLOGY_GAPS.md) for
 assumptions and limitations.
 

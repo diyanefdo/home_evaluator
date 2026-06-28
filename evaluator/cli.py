@@ -87,13 +87,26 @@ def build_engine_params(args: argparse.Namespace) -> dict:
     params["include_transaction_costs"] = include_tx
     params["ltt_region"] = ltt_region
     params["first_time_buyer"] = first_time
-    params["purchase_closing_costs"] = (
+    base_closing = (
         tax.purchase_closing_costs(price, ltt_region, first_time, purchase_legal)
         if include_tx else 0.0
     )
     params["commission_rate"] = _override(getattr(args, "commission_rate", None), tax.REALTOR_COMMISSION_RATE)
     params["hst_rate"] = tax.HST_RATE
     params["sale_legal_fee"] = tax.SALE_LEGAL_FEE
+
+    # ---- CMHC mortgage default insurance (down payment < 20%) ---------------
+    # The premium is financed into the mortgage principal; the PST on it is paid
+    # up front (folded into closing costs). An uninsurable low-down scenario
+    # (price > $1.5M, or below the CMHC minimum down) is a hard error.
+    cmhc = tax.cmhc_insurance(price, down, ltt_region)
+    if cmhc["required"] and not cmhc["insurable"]:
+        raise SystemExit(
+            f"Down payment {_money(down)} ({down / price * 100:.1f}%) is too low: {cmhc['reason']}."
+        )
+    params["cmhc"] = cmhc
+    params["cmhc_premium"] = cmhc["premium"] if include_tx else 0.0
+    params["purchase_closing_costs"] = base_closing + (cmhc["pst"] if include_tx else 0.0)
     return params
 
 
@@ -150,12 +163,18 @@ def print_report(params: dict, summary: dict, chart_paths: list[str]) -> None:
         pc = summary.get("purchase_closing_costs", params.get("purchase_closing_costs", 0))
         sc = summary.get("selling_costs_final", 0)
         ft = "  (first-time-buyer rebate applied)" if params.get("first_time_buyer") else ""
+        cmhc = params.get("cmhc") or {}
+        pst = cmhc.get("pst", 0.0) if cmhc.get("required") else 0.0
         print()
         print("  TRANSACTION COSTS:")
-        print(f"    At purchase       : {_money(pc, sym)} land-transfer tax + legal "
+        print(f"    At purchase       : {_money(pc - pst, sym)} land-transfer tax + legal "
               f"({params.get('ltt_region', 'ontario')}){ft}")
         print(f"    At sale (yr {T})    : {_money(sc, sym)} "
               f"(~{params.get('commission_rate', 0.05) * 100:.0f}% commission + HST + legal)")
+        if cmhc.get("required"):
+            print(f"    CMHC insurance    : {_money(cmhc['premium'], sym)} premium "
+                  f"@ {cmhc['rate'] * 100:.2f}% (LTV {cmhc['ltv'] * 100:.1f}%, financed into the loan) "
+                  f"+ {_money(cmhc['pst'], sym)} PST up front")
         print("    (Purchase cost is credited to the renter's invested lump.)")
     else:
         print()

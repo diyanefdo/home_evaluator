@@ -179,9 +179,94 @@ def purchase_closing_costs(
     return land_transfer_tax(price, region, first_time) + float(legal_fee)
 
 
+# --------------------------------------------------------------------------- #
+# CMHC mortgage default insurance (required when the down payment is < 20%).
+# --------------------------------------------------------------------------- #
+# Insurance is mandatory for a "high-ratio" mortgage (loan-to-value > 80%, i.e.
+# down payment under 20%). The one-time premium is a % of the loan amount, scaled
+# by loan-to-value, and is normally ADDED TO THE MORTGAGE PRINCIPAL (financed).
+# In Ontario the provincial sales tax on the premium (8%) is NOT financeable and
+# is paid up front at closing.
+CMHC_INSURABLE_LTV = 0.80              # insurance required above this loan-to-value
+CMHC_MAX_INSURABLE_PRICE = 1_500_000.0 # homes above this can't be insured (need 20% down)
+
+# Standard purchase premium rates by loan-to-value band (ceiling, rate).
+_CMHC_PREMIUM_RATES = [
+    (0.65, 0.0060), (0.75, 0.0170), (0.80, 0.0240),
+    (0.85, 0.0280), (0.90, 0.0310), (0.95, 0.0400),
+]
+# Provincial sales tax charged on the premium (paid up front, not financed).
+# Only Ontario (incl. Toronto) is modelled here; ON/MB are 8%, QC 9.975%, SK 6%.
+_CMHC_PST_ON_PREMIUM = {"ontario": 0.08, "toronto": 0.08}
+
+
+def cmhc_min_down_payment(price: float) -> float:
+    """Minimum down payment that allows an insured mortgage (None-equiv = 20%).
+
+    5% on the first $500k, 10% on the portion from $500k to $1.5M; above $1.5M an
+    insured mortgage is unavailable, so 20% is required.
+    """
+    price = float(price)
+    if price > CMHC_MAX_INSURABLE_PRICE:
+        return 0.20 * price
+    if price <= 500_000.0:
+        return 0.05 * price
+    return 0.05 * 500_000.0 + 0.10 * (price - 500_000.0)
+
+
+def cmhc_premium_rate(ltv: float) -> float:
+    """Premium rate for a given loan-to-value (0 at or below 80%)."""
+    if ltv <= CMHC_INSURABLE_LTV:
+        return 0.0
+    for ceiling, rate in _CMHC_PREMIUM_RATES:
+        if ltv <= ceiling:
+            return rate
+    return _CMHC_PREMIUM_RATES[-1][1]
+
+
+def cmhc_insurance(price: float, down: float, region: str = "ontario") -> dict:
+    """CMHC default-insurance breakdown for a purchase.
+
+    Returns a dict::
+
+        {"required": bool,    # down payment < 20%
+         "insurable": bool,   # meets CMHC price + min-down rules
+         "ltv": float, "rate": float,
+         "premium": float,    # financed into the mortgage principal
+         "pst": float, "pst_rate": float,  # paid up front at closing
+         "reason": str|None}  # why it isn't insurable, if applicable
+
+    Premium and PST are 0 when no insurance is required.
+    """
+    price = float(price)
+    down = float(down)
+    loan = max(0.0, price - down)
+    ltv = loan / price if price > 0 else 0.0
+    out = {"required": ltv > CMHC_INSURABLE_LTV, "insurable": True, "ltv": ltv,
+           "rate": 0.0, "premium": 0.0, "pst": 0.0, "pst_rate": 0.0, "reason": None}
+    if not out["required"]:
+        return out
+
+    if price > CMHC_MAX_INSURABLE_PRICE:
+        out.update(insurable=False,
+                   reason=f"homes over ${CMHC_MAX_INSURABLE_PRICE:,.0f} need 20% down (not insurable)")
+        return out
+    if down < cmhc_min_down_payment(price) - 1e-6:
+        out.update(insurable=False,
+                   reason=f"below the minimum down payment (${cmhc_min_down_payment(price):,.0f})")
+        return out
+
+    rate = cmhc_premium_rate(ltv)
+    premium = rate * loan
+    pst_rate = _CMHC_PST_ON_PREMIUM.get(region, 0.0)
+    out.update(rate=rate, premium=premium, pst=premium * pst_rate, pst_rate=pst_rate)
+    return out
+
+
 SOURCES = {
     "marginal_rates": "https://www.taxtips.ca/taxrates/on.htm (Ontario combined 2024)",
     "tfsa_limits": "https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/tax-free-savings-account/contributions.html",
     "rrsp_limits": "https://www.canada.ca/en/revenue-agency/services/tax/registered-plans-administrators/pspa/mp-rrsp-dpsp-tfsa-limits-ympe.html",
     "capital_gains": "https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/personal-income/line-12700-capital-gains.html",
+    "cmhc_premiums": "https://www.cmhc-schl.gc.ca/professionals/project-funding-and-mortgage-financing/mortgage-loan-insurance/mortgage-loan-insurance-homeownership-programs/cmhc-mortgage-loan-insurance-cost",
 }

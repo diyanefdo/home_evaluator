@@ -203,7 +203,10 @@ def build_projection(params: dict) -> dict:
 
     price = float(params["purchase_price"])
     down = float(params["down_payment"])
-    loan0 = price - down
+    # CMHC default-insurance premium (down < 20%) is financed into the principal,
+    # so the buyer amortizes price - down + premium and starts with that much owed.
+    cmhc_premium = float(params.get("cmhc_premium", 0.0))
+    loan0 = price - down + cmhc_premium
 
     annual_rate = float(params["mortgage_rate"])
     mrate = annual_rate / 12.0

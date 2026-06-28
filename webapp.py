@@ -26,7 +26,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 
-from evaluator import cli, projections
+from evaluator import cli, projections, tax
 
 app = FastAPI(title="Canadian Buy-vs-Rent Home Evaluator")
 
@@ -678,6 +678,9 @@ def _run_scenario(
         raise ValueError("Annual income must be $0 or more.")
     if strategy not in ("shelter-first", "taxable-only"):
         raise ValueError("Investing strategy must be 'shelter-first' or 'taxable-only'.")
+    cmhc_check = tax.cmhc_insurance(price, down_amount)
+    if cmhc_check["required"] and not cmhc_check["insurable"]:
+        raise ValueError(f"Down payment is too low: {cmhc_check['reason']}.")
 
     args = argparse.Namespace(
         price=price, down=down, years=years, postal=postal,
@@ -724,6 +727,18 @@ def _run_scenario(
     }
 
 
+def _buy_costs_field(sym: str, summary: dict, params: dict) -> str:
+    """Up-front purchase-cost tile, breaking out CMHC when the loan is high-ratio."""
+    pc = summary.get("purchase_closing_costs", 0)
+    cmhc = params.get("cmhc") or {}
+    if cmhc.get("required"):
+        pst = cmhc.get("pst", 0.0)
+        note = (f'(land-transfer + legal + {sym}{pst:,.0f} CMHC PST; '
+                f'+{sym}{cmhc.get("premium", 0):,.0f} premium financed @ {cmhc.get("rate", 0) * 100:.2f}%)')
+        return f'{sym}{pc - pst:,.0f} <small>{note}</small>'
+    return f'{sym}{pc:,.0f} <small>(land-transfer + legal)</small>'
+
+
 def _result_fields(sc: dict) -> dict:
     """Build the dynamic display strings (verdict, gap, stat tiles).
 
@@ -743,8 +758,7 @@ def _result_fields(sc: dict) -> dict:
         "mortgage": f'{years} yr <small>@ {params["mortgage_rate"] * 100:.2f}%</small>{rate_badge}',
         "crossover": sc["cross"],
         "renter_tax": f'{sym}{summary.get("renter_tax_paid", 0):,.0f}',
-        "buy_costs": (f'{sym}{summary.get("purchase_closing_costs", 0):,.0f} '
-                      '<small>(land-transfer + legal)</small>'),
+        "buy_costs": _buy_costs_field(sym, summary, params),
         "sell_costs": (f'{sym}{summary.get("selling_costs_final", 0):,.0f} '
                        '<small>(commission + HST)</small>'),
     }
