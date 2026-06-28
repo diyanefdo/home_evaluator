@@ -529,3 +529,15 @@ on my website there's no concept of user or login tho ?
 ## 2026-06-28 15:38:34
 
 commit and push
+
+## 2026-06-28 15:42:24
+
+what do u mean by adding google OAuth credentials
+
+## 2026-06-28 15:45:46
+
+yes
+
+## 2026-06-28 15:47:21
+
+yes
