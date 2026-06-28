@@ -264,3 +264,224 @@ yes implement it for ontario with live data
 ## 2026-06-27 10:56:04
 
 commit and push
+
+## 2026-06-27 10:56:51
+
+add per-CMA Ontario tiers with the scraper agent
+
+## 2026-06-27 10:59:50
+
+<task-notification>
+<task-id>a77a1fcfe24413551</task-id>
+<tool-use-id>toolu_01UYGw3zw64SRnwCyAVtWYwG</tool-use-id>
+<output-file>/tmp/claude-1000/-home-diyanefdo-home-evaluator/53d0c3ab-5873-4763-b0bd-1985e87e54b3/tasks/a77a1fcfe24413551.output</output-file>
+<status>killed</status>
+<summary>Agent "Research per-CMA Ontario data" was stopped by user</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Need St. Catharines 2025 tax rate plus rent data. Let me search rent (single-family/larger units) and the St. Catharines rate.</result>
+</task-notification>
+
+## 2026-06-28 11:40:29
+
+add per-CMA Ontario tiers with the scraper agent
+
+## 2026-06-28 11:42:57
+
+<task-notification>
+<task-id>a77a1fcfe24413551</task-id>
+<tool-use-id>toolu_01Y8hAKyg4cwCusshtDPgTDs</tool-use-id>
+<output-file>/tmp/claude-1000/-home-diyanefdo-home-evaluator/53d0c3ab-5873-4763-b0bd-1985e87e54b3/tasks/a77a1fcfe24413551.output</output-file>
+<status>completed</status>
+<summary>Agent "Research per-CMA Ontario data" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Research complete for all 10 CMAs. Here are the three deliverables.
+
+## 1. Region tier dicts
+
+```python
+REGION_TIERS = {
+    "ottawa": {
+        "home_appreciation_rate": 0.045,   # Ottawa HPI long-run, stable gov't-employment market (CREA/Teranet-NBC)
+        "maintenance_pct_of_value": 0.01,
+        "current_5yr_fixed_rate": 0.044,
+        "mortgage_rate_30yr_avg": 0.055,
+        "current_monthly_rent": 2800,      # 3-bed/SFH; Zumper/Rentals.ca 2025-26 (houses ~$2,800, 2-bed $2,503)
+        "rent_growth_rate": 0.03,          # CMHC long-run
+        "property_tax_rate": 0.012271,     # City of Ottawa 2025 total residential rate 1.227103% (WOWA/city budget)
+        "property_tax_growth_rate": 0.03,
+        "sp500_nominal_cagr": 0.10,
+        "ltt_region": "ontario",
+    },
+    "hamilton": {
+        "home_appreciation_rate": 0.05,    # GTA-adjacent, strong long-run HPI (CREA/Teranet-NBC)
+        "maintenance_pct_of_value": 0.01,
+        "current_5yr_fixed_rate": 0.044,
+        "mortgage_rate_30yr_avg": 0.055,
+        "current_monthly_rent": 2500,      # 3-bed/SFH; Rentals.ca/Zumper 2025-26 (2-bed apt ~$2,229)
+        "rent_growth_rate": 0.03,          # CMHC long-run
+        "property_tax_rate": 0.014970,     # City of Hamilton 2025 total residential rate 1.497000% (WOWA/city final rates)
+        "property_tax_growth_rate": 0.03,
+        "sp500_nominal_cagr": 0.10,
+        "ltt_region": "ontario",
+    },
+    "kitchener_waterloo": {
+        "home_appreciation_rate": 0.05,    # KWC tech-corridor, strong long-run HPI (CREA/Teranet-NBC)
+        "maintenance_pct_of_value": 0.01,
+        "current_5yr_fixed_rate": 0.044,
+        "mortgage_rate_30yr_avg": 0.055,
+        "current_monthly_rent": 2450,      # 3-bed/SFH; Zumper 2025-26 (3-bed apt ~$2,200, 2-bed $2,364)
+        "rent_growth_rate": 0.03,          # CMHC long-run
+        "property_tax_rate": 0.013567,     # City of Kitchener 2025 total residential rate 1.356658% (WOWA); CMA proxy
+        "property_tax_growth_rate": 0.03,
+        "sp500_nominal_cagr": 0.10,
+        "ltt_region": "ontario",
+    },
+    "london": {
+        "home_appreciation_rate": 0.05,    # Strong post-2015 in-migration growth, long-run HPI (CREA/Teranet-NBC)
+        "maintenance_pct_of_value": 0.01,
+        "current_5yr_fixed_rate": 0.044,
+        "mortgage_rate_30yr_avg": 0.055,
+        "current_monthly_rent": 2300,      # 3-bed/SFH; Zumper 2025-26 (2-bed apt ~$2,257)
+        "rent_growth_rate": 0.03,          # CMHC long-run
+        "property_tax_rate": 0.013889,     # City of London 2025 total residential rate 1.388893% (WOWA/city 2025 tax rates)
+        "property_tax_growth_rate": 0.03,
+        "sp500_nominal_cagr": 0.10,
+        "ltt_region": "ontario",
+    },
+    "windsor": {
+        "home_appreciation_rate": 0.05,    # Low base, strong recent catch-up growth; forward-sustainable (CREA/Teranet-NBC)
+        "maintenance_pct_of_value": 0.01,
+        "current_5yr_fixed_rate": 0.044,
+        "mortgage_rate_30yr_avg": 0.055,
+        "current_monthly_rent": 2100,      # 3-bed/SFH; Zumper 2025-26 (cheapest CMA here; 2-bed apt ~$1,936)
+        "rent_growth_rate": 0.03,          # CMHC long-run
+        "property_tax_rate": 0.020953,     # City of Windsor 2025 total residential rate 2.095293% (WOWA/city) — highest in ON
+        "property_tax_growth_rate": 0.03,
+        "sp500_nominal_cagr": 0.10,
+        "ltt_region": "ontario",
+    },
+    "oshawa": {
+        "home_appreciation_rate": 0.05,    # Durham/GTA commuter belt, strong long-run HPI (CREA/Teranet-NBC)
+        "maintenance_pct_of_value": 0.01,
+        "current_5yr_fixed_rate": 0.044,
+        "mortgage_rate_30yr_avg": 0.055,
+        "current_monthly_rent": 2600,      # 3-bed/SFH; Zumper/Apartments.com 2025-26 (overall avg ~$2,280)
+        "rent_growth_rate": 0.03,          # CMHC long-run
+        "property_tax_rate": 0.015245,     # City of Oshawa 2025 total residential rate 1.524475% (WOWA/city) — highest in GTA
+        "property_tax_growth_rate": 0.03,
+        "sp500_nominal_cagr": 0.10,
+        "ltt_region": "ontario",
+    },
+    "barrie": {
+        "home_appreciation_rate": 0.05,    # GTA-overflow commuter market, strong long-run HPI (CREA/Teranet-NBC)
+        "maintenance_pct_of_value": 0.01,
+        "current_5yr_fixed_rate": 0.044,
+        "mortgage_rate_30yr_avg": 0.055,
+        "current_monthly_rent": 2500,      # 3-bed/SFH; Zumper/Zillow 2025-26 (3-bed apt ~$2,125-2,500)
+        "rent_growth_rate": 0.03,          # CMHC long-run
+        "property_tax_rate": 0.014118,     # City of Barrie 2025 total residential rate 1.411754% (WOWA/By-law 2025-037)
+        "property_tax_growth_rate": 0.03,
+        "sp500_nominal_cagr": 0.10,
+        "ltt_region": "ontario",
+    },
+    "kingston": {
+        "home_appreciation_rate": 0.045,   # Stable institutional (university/hospital) market, long-run HPI (CREA/Teranet-NBC)
+        "maintenance_pct_of_value": 0.01,
+        "current_5yr_fixed_rate": 0.044,
+        "mortgage_rate_30yr_avg": 0.055,
+        "current_monthly_rent": 2200,      # 3-bed/SFH; Zumper 2025-26 (3-bed apt ~$2,023-2,125)
+        "rent_growth_rate": 0.03,          # CMHC long-run
+        "property_tax_rate": 0.015518,     # City of Kingston 2025 total residential rate 1.551784% (WOWA/city)
+        "property_tax_growth_rate": 0.03,
+        "sp500_nominal_cagr": 0.10,
+        "ltt_region": "ontario",
+    },
+    "guelph": {
+        "home_appreciation_rate": 0.05,    # Tight supply, KW/GTA-adjacent, strong long-run HPI (CREA/Teranet-NBC)
+        "maintenance_pct_of_value": 0.01,
+        "current_5yr_fixed_rate": 0.044,
+        "mortgage_rate_30yr_avg": 0.055,
+        "current_monthly_rent": 2400,      # 3-bed/SFH; Rentals.ca/RentCafe 2025-26 (3-bed range $1,675-3,450)
+        "rent_growth_rate": 0.03,          # CMHC long-run
+        "property_tax_rate": 0.013977,     # City of Guelph 2025 total residential rate 1.397700% (WOWA/city)
+        "property_tax_growth_rate": 0.03,
+        "sp500_nominal_cagr": 0.10,
+        "ltt_region": "ontario",
+    },
+    "st_catharines_niagara": {
+        "home_appreciation_rate": 0.05,    # GTA-overflow + retiree demand, strong long-run HPI (CREA/Teranet-NBC)
+        "maintenance_pct_of_value": 0.01,
+        "current_5yr_fixed_rate": 0.044,
+        "mortgage_rate_30yr_avg": 0.055,
+        "current_monthly_rent": 2400,      # 3-bed/SFH; Zumper/Zolo 2025-26 (3-bed apt ~$2,215, houses higher)
+        "rent_growth_rate": 0.03,          # CMHC long-run
+        "property_tax_rate": 0.017749,     # City of St. Catharines 2025 total residential rate 1.774882% (WOWA/Niagara By-law 2025-03); CMA proxy
+        "property_tax_growth_rate": 0.03,
+        "sp500_nominal_cagr": 0.10,
+        "ltt_region": "ontario",
+    },
+}
+```
+
+## 2. FSA-prefix → CMA routing table (first 2 chars of postal code)
+
+```python
+# FSA prefix (first 2 chars) -&gt; CMA key
+FSA_TO_CMA = {
+    # Eastern Ontario (K)
+    "K1": "ottawa", "K2": "ottawa", "K4": "ottawa",   # K1 central, K2 west/Kanata/Nepean, K4 Orleans/east
+    "K7": "kingston",
+    # Central / GTA-adjacent / Niagara (L)
+    "L1": "oshawa",                                    # Durham: Oshawa/Whitby/Ajax/Pickering
+    "L2": "st_catharines_niagara",                     # Niagara core: St. Catharines/Niagara Falls
+    "L8": "hamilton", "L9": "hamilton",                # Hamilton/Stoney Creek/Ancaster/Dundas
+    "L4": "barrie",                                    # NOTE: L4 is shared with York Region; Barrie is precisely L4M/L4N
+    # Southwestern Ontario (N)
+    "N1": "guelph",                                    # NOTE: N1R/N1S/N1T are Cambridge (KW CMA), not Guelph
+    "N2": "kitchener_waterloo", "N3": "kitchener_waterloo",  # N3 = Cambridge (also partly Brantford, a separate CMA)
+    "N5": "london", "N6": "london",
+    "N8": "windsor", "N9": "windsor",
+}
+```
+
+Routing caveats worth handling with a fallback to a generic Ontario tier:
+- `L4` collides with York Region (L4G Aurora, L4K Vaughan, etc.); only `L4M`/`L4N` are truly Barrie. If you can route on 3 chars for L4, do so.
+- `N1` is mostly Guelph but `N1R/N1S/N1T` are Cambridge (belongs to `kitchener_waterloo`); `N3` is Cambridge + Brantford (Brantford is a separate CMA not in this set).
+- `L7` (Burlington/Grimsby) is part of the Hamilton CMA but also covers Halton/GTA (Milton/Oakville) — left unmapped on purpose; default it to your Ontario fallback or Hamilton if you want CMA-accurate coverage.
+
+## 3. Sources
+
+Property-tax rates (2025 total residential, WOWA per-city pages, corroborated by city budgets/by-laws):
+- Ottawa 1.227103% — https://wowa.ca/taxes/ottawa-property-tax
+- Hamilton 1.497000% — https://wowa.ca/taxes/hamilton-property-tax ; https://www.hamilton.ca/sites/default/files/2025-05/taxes-2025-final-tax-rates.pdf
+- Kitchener 1.356658% — https://wowa.ca/taxes/kitchener-property-tax
+- London 1.388893% — https://wowa.ca/taxes/london-property-tax ; https://london.ca/sites/default/files/2025-05/City%20of%20London's%202025%20Tax%20Rates%20and%20Codes.pdf
+- Windsor 2.095293% — https://wowa.ca/taxes/windsor-property-tax
+- Oshawa 1.524475% — https://wowa.ca/taxes/oshawa-property-tax
+- Barrie 1.411754% — https://wowa.ca/taxes/barrie-property-tax ; https://www.barrie.ca/Tax-Rates-Bylaw.pdf
+- Kingston 1.551784% — https://wowa.ca/taxes/kingston-property-tax
+- Guelph 1.397700% — https://wowa.ca/taxes/guelph-property-tax
+- St. Catharines 1.774882% — https://wowa.ca/taxes/stcatharines-property-tax ; https://www.niagararegion.ca/government/bylaws/pdf/by-law-2025-03.pdf
+
+Rent (2025-2026, single-family/3-bed, blended):
+- https://rentals.ca/national-rent-report ; https://rentals.ca/blog/october-2025-rentals-ca-rent-report
+- Zumper rent-research per city, e.g. https://www.zumper.com/rent-research/ottawa-on , /kitchener-on, /oshawa-on, /barrie-on, /kingston-on
+- CMHC HMIP primary rental market: https://www03.cmhc-schl.gc.ca/hmip-pimh/en/TableMapChart/Table?TableId=2.1.31.2&amp;GeographyId=35&amp;GeographyTypeId=2
+
+Appreciation (long-run HPI, forward-realistic estimates, not peak-boom CAGR):
+- CREA national/provincial HPI: https://www.crea.ca/housing-market-stats/
+- Teranet–National Bank HPI: https://housepriceindex.ca/
+
+## Notes / caveats
+- Property-tax rates are hard 2025 published figures (high confidence). Ontario freezes MPAC assessments at 2016 values, so these rates rise directly with each year's budget — re-verify annually.
+- Rent figures are blended single-family/3-bed estimates from listing aggregators (Zumper/Rentals.ca/Zolo); listing-site data skews to current asking rents and is noisier than CMHC's purpose-built universe (which mostly reports apartments, so it understates SFH rent). Treat these as ±10%.
+- Appreciation rates are forward-sustainable judgment calls anchored to long-run HPI, deliberately below the 2000–2022 boom CAGRs per your spec — they are estimates, not scraped point values.
+- KW and Niagara use the main-city tax rate (Kitchener, St. Catharines) as the CMA proxy; Cambridge/Waterloo and Niagara Falls/Welland differ somewhat.
+
+Memory updated: `/home/diyanefdo/home_evaluator/.claude/agent-memory/canada-housing-financial-scraper/reference_ontario_cma_tax_rates.md` (verified rates + FSA routing for reuse).</result>
+<usage><subagent_tokens>51952</subagent_tokens><tool_uses>3</tool_uses><duration_ms>128886</duration_ms></usage>
+</task-notification>
+
+## 2026-06-28 11:47:11
+
+commit and push
