@@ -509,3 +509,23 @@ modeify the notes to indicate that i want to use a seperate container postgres d
 ## 2026-06-28 11:59:14
 
 commit and push
+
+## 2026-06-28 11:59:57
+
+in phase 2 can u start implementing the PostgreSQL in a separate container (volume-mounted) + real accounts (Google OAuth).
+
+## 2026-06-28 15:29:49
+
+do i need to do any extra commants to start a docker container
+
+## 2026-06-28 15:33:25
+
+what did u last implement
+
+## 2026-06-28 15:36:29
+
+on my website there's no concept of user or login tho ?
+
+## 2026-06-28 15:38:34
+
+commit and push
