@@ -131,7 +131,7 @@ tool works fully signed-out; accounts just add a "Sign in with Google" widget
 (foundation for saved scenarios / history later).
 
 Sign-in turns on only when **both** Google OAuth credentials are set (along with
-the DB). To enable it:
+the DB). Short version:
 
 1. Create an OAuth 2.0 **Web application** client at
    [Google Cloud → Credentials](https://console.cloud.google.com/apis/credentials),
@@ -140,6 +140,9 @@ the DB). To enable it:
    `GOOGLE_CLIENT_SECRET`, a random `EVALUATOR_SECRET_KEY`, and (behind a proxy/
    Tailscale Funnel) `EVALUATOR_OAUTH_REDIRECT`. Change `POSTGRES_PASSWORD`.
 3. `docker compose up -d --build`. `/healthz` reports `{"accounts": true, "db": true}`.
+
+**Full step-by-step (with screenshots-worth of detail, consent screen, and
+troubleshooting):** [`knowledge/GOOGLE_OAUTH_SETUP.md`](knowledge/GOOGLE_OAUTH_SETUP.md).
 
 New endpoints when enabled: `/login`, `/auth/google/callback`, `/logout`. Without
 the deps or env, the app degrades gracefully to the stateless tool.
