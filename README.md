@@ -77,9 +77,13 @@ Every regional assumption can be overridden from the CLI (see `--help`):
 
 Postal-code routing (most specific first): North York FSAs (`M2H/M2J/M2K/M2N`)
 use Toronto-specific data; any other `M` code uses City-of-Toronto data (Toronto
-property tax + municipal land-transfer tax); the rest of **Ontario** (`K/L/N/P`)
-uses an Ontario-wide default tier; everything else falls back to Canada-wide
-defaults. Add more regions in `evaluator/data.py`.
+property tax + municipal land-transfer tax); **10 Ontario CMAs** — Ottawa,
+Hamilton, Kitchener–Waterloo, London, Windsor, Oshawa, Barrie, Kingston, Guelph,
+and St. Catharines–Niagara — are routed by FSA prefix to researched local data
+(real 2025 municipal property-tax rates, blended single-family rents, long-run
+appreciation); the rest of **Ontario** (`K/L/N/P`) uses an Ontario-wide default
+tier; everything else falls back to Canada-wide defaults. Add more regions in
+`evaluator/data.py`.
 
 The **5-year mortgage rate is live**: with `--live` (CLI) or `EVALUATOR_LIVE_DATA`
 (web; on by default) the tool overlays the current discounted fixed rate derived

@@ -12,10 +12,12 @@ it's a menu to prioritize from.
 - **Modeling:** after-tax buy-vs-rent with registered accounts (TFSA/RRSP),
   capital-gains tax, principal-residence exemption, and transaction costs
   (land-transfer tax + sale commission).
-- **Data:** regional assumptions for Toronto/North York FSAs, an **all-Ontario
-  tier** (City of Toronto + provincial default for K/L/N/P), and national
-  fallbacks. The **5-year mortgage rate is live** (Bank of Canada Valet API,
-  cached, with offline fallback); other inputs are still researched constants.
+- **Data:** regional assumptions for Toronto/North York, **10 researched Ontario
+  CMAs** (Ottawa, Hamilton, KW, London, Windsor, Oshawa, Barrie, Kingston,
+  Guelph, St. Catharines–Niagara, routed by FSA prefix), an Ontario provincial
+  default, and national fallbacks. The **5-year mortgage rate is live** (Bank of
+  Canada Valet API, cached, with offline fallback); other inputs are researched
+  constants.
 - **State:** completely **stateless** — no database, no user accounts, every run
   is one-shot. Auth is optional HTTP basic-auth.
 - **Known modeling gaps still open** (see `METHODOLOGY_GAPS.md`): #5 terminal
@@ -58,7 +60,7 @@ passwords (use `argon2`/`bcrypt`). Keep the DB volume backed up.
 | **Address autofill** | Enter an address → geocode → derive FSA, property-tax rate, and a price estimate; pre-fill the form. | M | High |
 | **Live mortgage rates** ✅ | **DONE.** `evaluator/live.py` fetches the 5yr GoC benchmark yield from the **Bank of Canada Valet API** and derives the discounted fixed rate (+spread); cached (12h TTL) with offline fallback. `--live` / `EVALUATOR_LIVE_DATA` (web defaults on). | S–M | Medium |
 | **Neighbourhood stats** | Price trends, days-on-market, price-to-rent ratio, school/transit scores for the area. | M | Medium |
-| **More regions** | Expand `data.py` further: per-CMA Ontario tiers (Ottawa, Hamilton, London, KW…) with real municipal property-tax rates, then other provinces with correct land-transfer rules (BC PTT, no LTT in AB/SK, etc.). *Ontario-wide coverage is now in place* (see below). | M (ongoing) | High |
+| **More regions** | ✅ **Ontario done.** `data.REGION_TIERS` has 10 researched Ontario CMAs (Ottawa, Hamilton, KW, London, Windsor, Oshawa, Barrie, Kingston, Guelph, St. Catharines–Niagara) routed by FSA prefix, each with its real 2025 municipal property-tax rate. **Next:** other provinces with correct land-transfer rules (BC PTT, no LTT in AB/SK, etc.). | M (ongoing) | High |
 
 **Data sources & the big caveat:** there is **no free official MLS API**.
 Options, roughly in order of legitimacy:
@@ -101,10 +103,14 @@ Two ways to cover Ontario, cheapest first:
    (keeps Toronto property tax + municipal LTT); `K/L/N/P` → `ONTARIO_DEFAULTS`;
    everything else → national. Instantly better than the Canada-wide proxy for
    every Ontario user.
-2. **Per-CMA tiers (M, ongoing).** Add researched rows for the big markets
-   (Ottawa, Hamilton, London, Kitchener–Waterloo, Windsor, Kingston, Barrie,
-   etc.), each keyed by its FSAs, with the municipality's actual residential
-   property-tax rate. This is the same pattern as the Toronto row, repeated.
+2. **Per-CMA tiers (M, ongoing).** ✅ **DONE** for the 10 biggest Ontario
+   markets — `data.REGION_TIERS` (Ottawa, Hamilton, Kitchener–Waterloo, London,
+   Windsor, Oshawa, Barrie, Kingston, Guelph, St. Catharines–Niagara), each
+   keyed by FSA prefix with the municipality's actual 2025 residential
+   property-tax rate, blended SFH rents, and long-run appreciation. Routing
+   handles FSA collisions via 3-char overrides (L4M/L4N → Barrie so York Region
+   isn't misrouted; N1R/S/T → Cambridge/KW). Smaller CMAs (Brantford,
+   Peterborough, Sudbury, Thunder Bay…) still fall back to the Ontario default.
 
 ### Is live data possible? (yes — for the *assumptions*, mostly not for listings)
 
