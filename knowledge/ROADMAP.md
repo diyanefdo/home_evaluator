@@ -32,7 +32,7 @@ it's a menu to prioritize from.
 
 | Idea | What | Effort | Impact |
 |------|------|--------|--------|
-| **Persistence layer** | Add a database. Start with **SQLite** (one file, zero-ops, fits the single-PC Docker setup; mount as a volume so it survives rebuilds). Migrate to Postgres only if multi-user/scale demands it. Use SQLModel/SQLAlchemy. | M | Foundational |
+| **Persistence layer** | Add a database. **Decision: use PostgreSQL in its own container** (a separate `db` service in `docker-compose.yml`, reached over the compose network by service name, with a named volume for `/var/lib/postgresql/data` so it survives rebuilds). The app connects via an `EVALUATOR_DB` URL (`postgresql://…@db:5432/…`) and `depends_on: db`. Use SQLModel/SQLAlchemy so models stay DB-agnostic. (SQLite was considered but rejected in favour of Postgres for concurrent writes and a clean path to scale.) | M | Foundational |
 | **User accounts** | Replace basic-auth with real accounts (email + password, or magic-link, or OAuth via Google — the deploy already has a Google identity). Sessions via signed cookies. | M | High |
 | **Saved scenarios** | Logged-in users can name and save a scenario (all inputs + a snapshot of the result). List, reopen, edit, delete. | M | High |
 | **Scenario history / "my runs"** | Auto-save every evaluation to the user's history with a timestamp; let them revisit or re-run. | S–M | Medium |
@@ -177,7 +177,7 @@ priority than just researching them once into the Ontario/CMA tiers above.
 | **Observability** | Structured logging, error tracking (Sentry), basic uptime/health metrics. | S–M | Medium |
 | **Methodology/transparency page** | An in-app page explaining every assumption with sources and the disclaimer — builds trust and reduces "is this legit?" friction. | S | Medium |
 | **Stronger disclaimers** | Clear "not financial advice" + assumptions surfaced near the result, not just in a footnote. | S | Medium (legal) |
-| **DB backups** | If/when stateful, automate backups of the SQLite/Postgres volume. | S | Medium |
+| **DB backups** | If/when stateful, automate backups of the Postgres volume (`pg_dump` on a schedule, or snapshot the named volume). | S | Medium |
 
 ---
 
@@ -288,7 +288,7 @@ A pragmatic order that front-loads value and respects dependencies:
 - Methodology/transparency page + clearer disclaimers. *(remaining)*
 
 **Phase 2 — Go stateful (the platform shift)**
-- SQLite persistence (volume-mounted) + real accounts (Google OAuth).
+- PostgreSQL in a separate container (volume-mounted) + real accounts (Google OAuth).
 - Saved scenarios, run history, shareable links.
 - Basic usage analytics / admin dashboard.
 
