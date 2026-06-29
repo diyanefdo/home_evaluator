@@ -471,7 +471,7 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
    background:var(--card);border:1px solid var(--line);border-radius:14px;
    padding:.9rem 1.1rem;margin:.2rem 0 .6rem;box-shadow:0 6px 18px rgba(8,40,64,.06)}
  .savebox h2{font-size:1rem;margin:0;color:var(--ink);flex:0 0 auto}
- .savebox input[type=text],.savebox button{box-sizing:border-box;font-family:inherit;
+ .savebox input[type=text],.savebox button{box-sizing:border-box;font-family:inherit;margin:0;
    font-size:15px;line-height:1.2;padding:.55rem .9rem;border-radius:10px;border:1px solid transparent}
  .savebox input[type=text]{flex:1 1 200px;min-width:140px;border-color:var(--line);background:#fbfdff}
  .savebox button{flex:0 0 auto;cursor:pointer;font-weight:700;color:#fff;background:var(--brand)}
@@ -490,7 +490,7 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
  .scen-card .scen-verdict{font-weight:700}
  .scen-card .scen-actions{display:flex;gap:.5rem;flex-wrap:wrap}
  .scen-card .scen-actions a,.scen-card .scen-actions button{
-   display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;
+   display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;margin:0;
    line-height:1;font-family:inherit;padding:.5rem .85rem;border-radius:9px;
    font-size:.85rem;font-weight:700;text-decoration:none;cursor:pointer;
    border:1px solid var(--line);background:#fbfdff;color:var(--brand)}
@@ -505,7 +505,7 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
    flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:12px;
    padding:.7rem 1rem;margin:1.2rem 0 .2rem}
  .cmp-bar span{color:var(--muted);font-size:.9rem;font-weight:600}
- .cmp-bar button{padding:.5rem 1rem;border:0;border-radius:9px;cursor:pointer;
+ .cmp-bar button{margin:0;padding:.5rem 1rem;border:0;border-radius:9px;cursor:pointer;
    font-weight:700;color:#fff;background:var(--brand)}
  .cmp-bar button:disabled{background:#aebfce;cursor:not-allowed}
  .cmp-wrap{overflow-x:auto;margin:1rem 0}
