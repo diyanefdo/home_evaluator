@@ -622,3 +622,23 @@ when i press "save scenario" without putting down a name for it "Name it first" 
 ## 2026-06-28 21:17:53
 
 commit and push
+
+## 2026-06-28 21:20:44
+
+under "my runs", "open" button is shorter than "save" button. can you make "open" button the same length as "save" button
+
+## 2026-06-28 21:22:40
+
+under "
+
+## 2026-06-28 21:22:52
+
+under "my runs", "open" button is shorter than "save" button. can you make "open" button the same length as "save" button
+
+## 2026-06-28 21:25:16
+
+under "saved scenarios" the checkbox for comparing for each entry is above the rest of the contents per entry. can you align it properly
+
+## 2026-06-28 22:15:21
+
+commit and push
