@@ -476,9 +476,10 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
  .savebox input[type=text]{flex:1 1 200px;min-width:140px;border-color:var(--line);background:#fbfdff}
  .savebox button{flex:0 0 auto;cursor:pointer;font-weight:700;color:#fff;background:var(--brand)}
  .savebox button:hover{filter:brightness(1.07)}
- .savebox .save-status{font-size:.85rem;color:var(--muted)}
- .savebox .save-status.ok{color:#0a7d33}
- .savebox .save-status.err{color:#c0392b}
+ .savebox .save-status{display:inline-flex;align-items:center;align-self:stretch;
+   box-sizing:border-box;border-radius:10px;font-size:.85rem;font-weight:600;color:var(--muted)}
+ .savebox .save-status.ok{color:#0a7d33;background:rgba(16,160,64,.12);padding:0 .7rem}
+ .savebox .save-status.err{color:#c0392b;background:rgba(192,57,43,.10);padding:0 .7rem}
  /* scenarios list page */
  .scen-list{display:grid;gap:.85rem;margin:1.2rem 0}
  .scen-card{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;
@@ -608,7 +609,7 @@ function saveScenario(){
 }
 function shareScenario(){
   var st=document.getElementById('share-status');
-  st.className='share-status';st.textContent='Creating link\\u2026';
+  st.className='save-status';st.textContent='Creating link\\u2026';
   fetch('/api/share',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({inputs:currentInputs()})})
    .then(function(r){return r.json();})
@@ -616,9 +617,9 @@ function shareScenario(){
      if(d.ok){var url=location.origin+d.url;var box=document.getElementById('share-link');
        box.value=url;box.style.display='';box.focus();box.select();
        if(navigator.clipboard) navigator.clipboard.writeText(url);
-       st.className='share-status ok';st.textContent='Link copied \\u2713';}
-     else{st.className='share-status err';st.textContent=(d.detail||'Could not create link');}
-   }).catch(function(){st.className='share-status err';st.textContent='Could not create link';});
+       st.className='save-status ok';st.textContent='Link copied \\u2713';}
+     else{st.className='save-status err';st.textContent=(d.detail||'Could not create link');}
+   }).catch(function(){st.className='save-status err';st.textContent='Could not create link';});
 }
 """
 
