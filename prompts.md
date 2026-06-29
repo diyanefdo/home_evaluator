@@ -598,3 +598,11 @@ can you work on the ideas Scenario history / "my runs", Compare scenarios and Sh
 ## 2026-06-28 21:00:58
 
 commit and push
+
+## 2026-06-28 21:03:56
+
+"Name this scenario" bar and "save_scenario button are not vertically aligned
+
+## 2026-06-28 21:06:23
+
+commit and push
