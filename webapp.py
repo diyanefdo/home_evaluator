@@ -491,9 +491,11 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
  .scen-card .scen-actions{display:flex;gap:.5rem;flex-wrap:wrap}
  .scen-card .scen-actions a,.scen-card .scen-actions button{
    display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;margin:0;
-   line-height:1;font-family:inherit;padding:.5rem .85rem;border-radius:9px;
+   line-height:1;font-family:inherit;padding:.5rem .85rem;border-radius:9px;min-width:5.25rem;
    font-size:.85rem;font-weight:700;text-decoration:none;cursor:pointer;
    border:1px solid var(--line);background:#fbfdff;color:var(--brand)}
+ .scen-card .scen-form{display:inline-flex}
+ .scen-card .scen-form button{width:100%}
  .scen-card .scen-actions .open{background:var(--brand);color:#fff;border-color:var(--brand)}
  .scen-card .scen-actions .del{color:#c0392b}
  .scen-empty{color:var(--muted);background:var(--card);border:1px dashed var(--line);
