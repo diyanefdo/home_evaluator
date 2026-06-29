@@ -606,3 +606,11 @@ commit and push
 ## 2026-06-28 21:06:23
 
 commit and push
+
+## 2026-06-28 21:07:59
+
+under "my runs" "open" and "save" button have different lengths. make them the same
+
+## 2026-06-28 21:09:47
+
+commit and push
