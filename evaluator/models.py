@@ -41,3 +41,23 @@ class Scenario(SQLModel, table=True):
     snapshot: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
+
+
+class RunHistory(SQLModel, table=True):
+    """An auto-recorded evaluation for a signed-in user ("my runs")."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(index=True, foreign_key="user.id")
+    inputs: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    snapshot: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class SharedResult(SQLModel, table=True):
+    """A result persisted under a short slug for read-only sharing (no account)."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    slug: str = Field(index=True, unique=True)
+    inputs: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    snapshot: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=_utcnow)

@@ -33,7 +33,7 @@ from evaluator import cli, projections, tax
 try:
     from starlette.middleware.sessions import SessionMiddleware
     from authlib.integrations.starlette_client import OAuth, OAuthError
-    from evaluator import db as eval_db, accounts, scenarios
+    from evaluator import db as eval_db, accounts, scenarios, history, shares
     _ACCOUNTS_IMPORTABLE = True
 except Exception:  # noqa: BLE001 - any import problem just disables accounts
     _ACCOUNTS_IMPORTABLE = False
@@ -134,6 +134,7 @@ def _auth_bar(user: dict | None) -> str:
     if user:
         who = html.escape(user.get("name") or user.get("email") or "Account")
         return (f'<div class="authbar"><span class="who">{who}</span>'
+                f'<a class="authbtn ghost" href="/history">My runs</a>'
                 f'<a class="authbtn ghost" href="/scenarios">My scenarios</a>'
                 f'<a class="authbtn" href="/logout">Sign out</a></div>')
     return ('<div class="authbar">'
@@ -498,6 +499,28 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
  .scen-empty{color:var(--muted);background:var(--card);border:1px dashed var(--line);
    border-radius:14px;padding:2rem;text-align:center;margin:1.2rem 0}
  .scen-form{display:inline}
+ .scen-pick{width:18px;height:18px;flex:0 0 auto;accent-color:var(--brand);cursor:pointer}
+ /* compare bar + table */
+ .cmp-bar{display:flex;align-items:center;justify-content:space-between;gap:1rem;
+   flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:12px;
+   padding:.7rem 1rem;margin:1.2rem 0 .2rem}
+ .cmp-bar span{color:var(--muted);font-size:.9rem;font-weight:600}
+ .cmp-bar button{padding:.5rem 1rem;border:0;border-radius:9px;cursor:pointer;
+   font-weight:700;color:#fff;background:var(--brand)}
+ .cmp-bar button:disabled{background:#aebfce;cursor:not-allowed}
+ .cmp-wrap{overflow-x:auto;margin:1rem 0}
+ .cmp-table{width:100%;border-collapse:collapse;background:var(--card);
+   border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:.92rem}
+ .cmp-table th,.cmp-table td{padding:.6rem .8rem;text-align:left;border-bottom:1px solid var(--line)}
+ .cmp-table thead th{background:#f3f7fb;color:var(--ink);font-size:.85rem}
+ .cmp-table tbody th{color:var(--muted);font-weight:600;white-space:nowrap}
+ .cmp-table td{color:var(--ink);font-weight:600}
+ /* shared (read-only) note + share box */
+ .shared-note{background:#fff7e8;border:1px solid #f4d79a;color:#8a5a12;
+   border-radius:12px;padding:.7rem 1rem;margin:.2rem 0 .6rem;font-size:.9rem;font-weight:600}
+ .shared-note a{color:var(--brand-dark)}
+ .sharebox .share-link{flex:1 1 240px;min-width:160px;font-family:ui-monospace,monospace;
+   font-size:.85rem;color:var(--ink)}
 </style></head><body>"""
 
 PAGE_FOOT = "</body></html>"
@@ -553,23 +576,27 @@ function wfOnInput(){wfLabels();clearTimeout(WF_T);WF_T=setTimeout(wfRecompute,3
 wfLabels();
 """
 
-# Save-scenario behaviour. SCEN_ID + SAVE_INPUTS are injected per result; the save
-# captures the *current* slider state so tweaks are stored faithfully.
-SAVE_SCRIPT_BODY = """
-function saveScenario(){
-  var inp=Object.assign({}, SAVE_INPUTS);
+# Save + share behaviour. RESULT_INPUTS (+ SCEN_ID) are injected per result;
+# currentInputs() folds in the live slider state so tweaks are captured faithfully.
+RESULT_SCRIPT_BODY = """
+function currentInputs(){
+  var inp=Object.assign({}, RESULT_INPUTS);
   var g=function(id){var e=document.getElementById(id);return e?e.value:null;};
   if(g('s-down')!=null) inp.down=g('s-down')+'%';
   if(g('s-rate')!=null) inp.rate=g('s-rate')/100;
   if(g('s-appr')!=null) inp.appreciation=g('s-appr')/100;
   if(g('s-ret')!=null) inp.investment_return=g('s-ret')/100;
   if(g('s-rent')!=null) inp.rent=g('s-rent');
-  var name=(g('scen-name')||'').trim();
+  return inp;
+}
+function saveScenario(){
+  var ne=document.getElementById('scen-name');
+  var name=((ne&&ne.value)||'').trim();
   var st=document.getElementById('save-status');
   if(!name){st.className='save-status err';st.textContent='Name it first';return;}
   st.className='save-status';st.textContent='Saving\\u2026';
   fetch('/api/scenarios',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({name:name,inputs:inp,id:SCEN_ID})})
+    body:JSON.stringify({name:name,inputs:currentInputs(),id:SCEN_ID})})
    .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
    .then(function(res){
      if(res.ok&&res.d.ok){st.className='save-status ok';st.textContent='Saved \\u2713';
@@ -577,6 +604,43 @@ function saveScenario(){
      else{st.className='save-status err';st.textContent=(res.d.detail||'Could not save');}
    }).catch(function(){st.className='save-status err';st.textContent='Could not save';});
 }
+function shareScenario(){
+  var st=document.getElementById('share-status');
+  st.className='share-status';st.textContent='Creating link\\u2026';
+  fetch('/api/share',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({inputs:currentInputs()})})
+   .then(function(r){return r.json();})
+   .then(function(d){
+     if(d.ok){var url=location.origin+d.url;var box=document.getElementById('share-link');
+       box.value=url;box.style.display='';box.focus();box.select();
+       if(navigator.clipboard) navigator.clipboard.writeText(url);
+       st.className='share-status ok';st.textContent='Link copied \\u2713';}
+     else{st.className='share-status err';st.textContent=(d.detail||'Could not create link');}
+   }).catch(function(){st.className='share-status err';st.textContent='Could not create link';});
+}
+"""
+
+# Compare-page chart: one "buyer minus renter" net-worth-gap line per scenario.
+COMPARE_SCRIPT_BODY = """
+(function(){
+  if(typeof Plotly==='undefined'||typeof CMP==='undefined') return;
+  var colors=['#1f77b4','#ff7f0e','#2ca02c','#9467bd'];
+  var traces=CMP.map(function(s,i){
+    var gap=s.buyer.map(function(b,j){return b-s.renter[j];});
+    return {x:s.years,y:gap,name:s.name,mode:'lines',
+      line:{color:colors[i%colors.length],width:2.6},
+      hovertemplate:'%{y:$,.0f}<extra>'+s.name+'</extra>'};
+  });
+  var layout={margin:{l:64,r:16,t:10,b:42},hovermode:'x unified',
+    paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',
+    font:{family:'system-ui,-apple-system,Segoe UI,Roboto,sans-serif',size:12,color:'#16263a'},
+    legend:{orientation:'h',y:1.14,x:0,font:{size:11}},
+    xaxis:{title:'Year',gridcolor:'#eef2f7',zeroline:false,automargin:true},
+    yaxis:{title:'Buyer \\u2212 renter ($)',tickprefix:'$',tickformat:'.2s',
+      gridcolor:'#eef2f7',zeroline:true,zerolinecolor:'#b9c4d0',automargin:true}};
+  Plotly.newPlot('cmp-chart',traces,layout,
+    {responsive:true,displaylogo:false,modeBarButtonsToRemove:['lasso2d','select2d']});
+})();
 """
 
 # Interactive chart rendering with the vendored Plotly. renderCharts(d) is global
@@ -1108,6 +1172,8 @@ def scenarios_list(request: Request):
             nm = html.escape(r["name"])
             cards += (
                 '<div class="scen-card">'
+                f'<input type="checkbox" class="scen-pick" value="{r["id"]}" '
+                'onchange="cmpSync()" title="Select to compare">'
                 '<div class="scen-main">'
                 f'<div class="scen-name">{nm}</div>'
                 f'<div class="scen-meta"><span class="scen-verdict">{verdict} ahead by {gap}'
@@ -1127,7 +1193,24 @@ def scenarios_list(request: Request):
                 '</div>'
                 '</div>'
             )
-        body_inner = f'<div class="scen-list">{cards}</div>'
+        cmp_bar = ''
+        if len(rows) >= 2:
+            cmp_bar = (
+                '<div class="cmp-bar"><span id="cmp-count">Select 2–4 scenarios to compare</span>'
+                '<button id="cmp-btn" type="button" disabled onclick="cmpGo()">Compare selected</button>'
+                '</div>'
+            )
+        body_inner = (
+            cmp_bar + f'<div class="scen-list">{cards}</div>'
+            + '<script>function cmpPicked(){return [].slice.call('
+            + 'document.querySelectorAll(".scen-pick:checked")).map(function(c){return c.value;});}'
+            + 'function cmpSync(){var n=cmpPicked().length;var b=document.getElementById("cmp-btn");'
+            + 'if(!b)return;b.disabled=(n<2||n>4);'
+            + 'document.getElementById("cmp-count").textContent=n?("Comparing "+n+" selected"):'
+            + '"Select 2–4 scenarios to compare";}'
+            + 'function cmpGo(){var ids=cmpPicked();if(ids.length>=2)'
+            + 'location.href="/compare?ids="+ids.join(",");}</script>'
+        )
     else:
         body_inner = ('<div class="scen-empty">No saved scenarios yet. Run an '
                       'evaluation, then use <b>Save scenario</b> on the results page.</div>')
@@ -1136,7 +1219,7 @@ def scenarios_list(request: Request):
         + '<section class="hero"><div class="hero-copy">'
         + '<span class="eyebrow"><span class="dot"></span> Your account</span>'
         + '<h1>Saved scenarios</h1>'
-        + '<p>Reopen, rename, or delete the scenarios you\'ve saved.</p>'
+        + '<p>Reopen, rename, delete, or select a few to compare side by side.</p>'
         + '</div></section>'
         + body_inner
         + '<p><a class="back" href="/">&larr; New evaluation</a></p>'
@@ -1170,45 +1253,167 @@ def scenario_delete(scenario_id: int, request: Request):
     return RedirectResponse(url="/scenarios", status_code=303)
 
 
-@app.get("/evaluate", response_class=HTMLResponse)
-def evaluate(
-    request: Request,
-    price: float,
-    down: str = "20%",
-    years: int = 30,
-    postal: str = "M2J 0E8",
-    # Tax layer: registered-account sheltering + capital-gains tax.
-    age: int = 35,
-    income: float = 120000.0,
-    strategy: str = "shelter-first",
-    first_time: bool = False,
-    # Optional power-user overrides (default to regional data when omitted).
-    rate: float | None = None,
-    appreciation: float | None = None,
-    rent: float | None = None,
-    rent_growth: float | None = None,
-    property_tax_rate: float | None = None,
-    investment_return: float | None = None,
-    insurance: float = 1500.0,
-    hoa: float = 0.0,
-    retirement_rate: float | None = None,
-    sid: int | None = None,   # set when reopening a saved scenario (for "Update")
-    _: None = Depends(require_auth),
-):
-    try:
-        sc = _run_scenario(
-            price=price, down=down, years=years, postal=postal,
-            age=age, income=income, strategy=strategy, first_time=first_time,
-            rate=rate, appreciation=appreciation, rent=rent, rent_growth=rent_growth,
-            property_tax_rate=property_tax_rate, investment_return=investment_return,
-            insurance=insurance, hoa=hoa, retirement_rate=retirement_rate,
-        )
-    except ValueError as exc:
-        return _error_page(str(exc))
-    params = sc["params"]
+# --------------------------------------------------------------------------- #
+# Run history ("my runs")
+# --------------------------------------------------------------------------- #
+@app.get("/history", response_class=HTMLResponse)
+def history_page(request: Request):
+    user = _require_login(request)
+    rows = history.list_for_user(user["id"])
+    if rows:
+        cards = ""
+        for r in rows:
+            snap = r.get("snapshot") or {}
+            inp = r.get("inputs") or {}
+            verdict = html.escape(snap.get("verdict_word", "—"))
+            gap = html.escape(snap.get("gap_str", ""))
+            tax_tag = " after tax" if snap.get("after_tax") else ""
+            region = html.escape(snap.get("region", snap.get("postal", "")))
+            when = html.escape((r.get("created_at") or "").replace("T", " ")[:16])
+            q = html.escape(_scenario_query(inp))
+            inp_json = html.escape(json.dumps(inp))
+            cards += (
+                '<div class="scen-card">'
+                '<div class="scen-main">'
+                f'<div class="scen-name">{region or "Evaluation"}</div>'
+                f'<div class="scen-meta"><span class="scen-verdict">{verdict} ahead by {gap}'
+                f'{tax_tag}</span> &middot; {when}</div>'
+                '</div>'
+                '<div class="scen-actions">'
+                f'<a class="open" href="/evaluate?{q}">Open</a>'
+                f'<button type="button" data-inputs="{inp_json}" '
+                'onclick="histSave(this)">Save</button>'
+                '</div>'
+                '</div>'
+            )
+        inner = f'<div class="scen-list">{cards}</div>'
+    else:
+        inner = ('<div class="scen-empty">No runs yet. Each evaluation you run while '
+                 'signed in is recorded here.</div>')
+    body = (
+        PAGE_HEAD
+        + '<section class="hero"><div class="hero-copy">'
+        + '<span class="eyebrow"><span class="dot"></span> Your account</span>'
+        + '<h1>My runs</h1><p>Your recent evaluations. Reopen one, or save it as a '
+        + 'named scenario.</p></div></section>'
+        + inner
+        + '<p><a class="back" href="/">&larr; New evaluation</a></p>'
+        + '<script>function histSave(btn){var inp=JSON.parse(btn.dataset.inputs);'
+        + 'var name=prompt("Save as scenario \\u2014 name:");if(name===null||!name.trim())return;'
+        + 'btn.textContent="Saving\\u2026";'
+        + 'fetch("/api/scenarios",{method:"POST",headers:{"Content-Type":"application/json"},'
+        + 'body:JSON.stringify({name:name.trim(),inputs:inp})}).then(function(r){return r.json();})'
+        + '.then(function(d){btn.textContent=d.ok?"Saved \\u2713":"Failed";})'
+        + '.catch(function(){btn.textContent="Failed";});}</script>'
+        + PAGE_FOOT
+    )
+    return HTMLResponse(_page(body, user))
 
-    # Title + caption for each chart, in render order. The browser draws these
-    # interactively with Plotly into the chart-N divs below.
+
+# --------------------------------------------------------------------------- #
+# Compare scenarios (2–4 saved scenarios side by side)
+# --------------------------------------------------------------------------- #
+@app.get("/compare", response_class=HTMLResponse)
+def compare_page(request: Request, ids: str = ""):
+    user = _require_login(request)
+    id_list = [int(x) for x in ids.split(",") if x.strip().isdigit()][:4]
+    rows = [r for r in (scenarios.get(i, user["id"]) for i in id_list) if r]
+    if len(rows) < 2:
+        return _error_page("Pick 2–4 of your saved scenarios to compare.")
+
+    runs = []
+    for r in rows:
+        try:
+            runs.append((r, _run_from_inputs(r["inputs"])))
+        except Exception:  # noqa: BLE001 - skip a scenario that won't run
+            continue
+    if len(runs) < 2:
+        return _error_page("Could not run enough of those scenarios to compare.")
+
+    # Comparison table: one column per scenario.
+    metrics = [
+        ("Region", lambda r, sc: html.escape(sc["params"]["region_label"])),
+        ("Home price", lambda r, sc: f'{sc["sym"]}{sc["params"]["purchase_price"]:,.0f}'),
+        ("Down payment", lambda r, sc: _result_fields(sc)["stats"]["down"]),
+        ("Mortgage", lambda r, sc: _result_fields(sc)["stats"]["mortgage"]),
+        ("Verdict", lambda r, sc: f'{("Buying" if sc["leader"]=="buyer" else "Renting")}'),
+        ("Net-worth gap", lambda r, sc: _result_fields(sc)["gap_str"]),
+        ("Crossover", lambda r, sc: _result_fields(sc)["stats"]["crossover"]),
+        ("Buy closing costs", lambda r, sc: _result_fields(sc)["stats"]["buy_costs"]),
+        ("Sell costs", lambda r, sc: _result_fields(sc)["stats"]["sell_costs"]),
+    ]
+    head = "".join(f'<th>{html.escape(r["name"])}</th>' for r, _ in runs)
+    body_rows = ""
+    for label, fn in metrics:
+        cells = "".join(f"<td>{fn(r, sc)}</td>" for r, sc in runs)
+        body_rows += f"<tr><th>{label}</th>{cells}</tr>"
+    table = (f'<div class="cmp-wrap"><table class="cmp-table"><thead><tr><th></th>{head}'
+             f'</tr></thead><tbody>{body_rows}</tbody></table></div>')
+
+    cmp_data = [{
+        "name": r["name"],
+        "years": sc["chart_data"]["years"],
+        "buyer": sc["chart_data"]["c5"]["buyer"],
+        "renter": sc["chart_data"]["c5"]["renter"],
+    } for r, sc in runs]
+
+    body = (
+        PAGE_HEAD
+        + '<section class="hero"><div class="hero-copy">'
+        + '<span class="eyebrow"><span class="dot"></span> Your account</span>'
+        + '<h1>Compare scenarios</h1><p>Net-worth gap (buyer minus renter, after tax) '
+        + 'over time — above zero means buying wins.</p></div></section>'
+        + '<div id="cmp-chart" class="plot" style="height:420px"></div>'
+        + table
+        + '<p><a class="back" href="/scenarios">&larr; Back to scenarios</a></p>'
+        + '<script src="/static/plotly.min.js"></script>'
+        + '<script>var CMP=' + json.dumps(cmp_data) + ';\n' + COMPARE_SCRIPT_BODY + '</script>'
+        + PAGE_FOOT
+    )
+    return HTMLResponse(_page(body, user))
+
+
+# --------------------------------------------------------------------------- #
+# Shareable result links (read-only, no account needed to view)
+# --------------------------------------------------------------------------- #
+class ShareIn(BaseModel):
+    inputs: dict
+
+
+@app.post("/api/share")
+def create_share(payload: ShareIn, request: Request):
+    if not _DB_ON:
+        raise HTTPException(status_code=404, detail="Sharing is not enabled.")
+    try:
+        inputs = _sanitize_inputs(payload.inputs)
+        if "price" not in inputs:
+            raise ValueError("missing price")
+        sc = _run_from_inputs(inputs)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=f"Could not create link: {exc}")
+    row = shares.create(inputs, _snapshot(sc))
+    return {"ok": True, "slug": row["slug"], "url": f"/r/{row['slug']}"}
+
+
+@app.get("/r/{slug}", response_class=HTMLResponse)
+def shared_result(slug: str, request: Request):
+    if not _DB_ON:
+        raise HTTPException(status_code=404, detail="Sharing is not enabled.")
+    row = shares.get_by_slug(slug)
+    if row is None:
+        return _error_page("This shared link wasn't found (it may have been removed).")
+    try:
+        sc = _run_from_inputs(row["inputs"])
+    except Exception as exc:  # noqa: BLE001
+        return _error_page(f"Could not load this shared scenario: {exc}")
+    return HTMLResponse(_page(_render_result_html(sc, row["inputs"], readonly=True),
+                              _current_user(request)))
+
+
+def _render_result_html(sc: dict, inputs: dict, *, user: dict | None = None,
+                        sid: int | None = None, readonly: bool = False) -> str:
+    """Build the full results page. Shared by /evaluate and /r/<slug> (read-only)."""
+    params = sc["params"]
     chart_meta = [
         ("House price trajectory",
          "Projected market value of the home across the term."),
@@ -1223,7 +1428,6 @@ def evaluate(
         ("Sensitivity: who wins",
          "How the result shifts across home-appreciation and investment-return assumptions."),
     ]
-
     cards = ""
     for i, (title, cap) in enumerate(chart_meta):
         cards += (
@@ -1242,6 +1446,11 @@ def evaluate(
     s = f["stats"]
     sym = sc["sym"]
     strat_label = sc["strat_label"].replace("&", "&amp;")
+
+    shared_note = (
+        '<div class="shared-note">Shared scenario (read-only). '
+        '<a href="/">Run your own evaluation &rarr;</a></div>'
+    ) if readonly else ""
 
     banner = (
         '<section class="result-banner reveal">'
@@ -1279,7 +1488,6 @@ def evaluate(
         '</div>'
     )
 
-    # What-if sliders, initialized to this scenario's current assumptions.
     d_pct = round(sc["pct"])
     r_rate = round(params["mortgage_rate"] * 100, 1)
     r_appr = round(params["appreciation_rate"] * 100, 1)
@@ -1305,29 +1513,15 @@ def evaluate(
     )
 
     base_js = json.dumps({
-        "price": price, "years": sc["years"], "postal": postal, "age": age,
-        "income": income, "strategy": strategy,
-        "first_time": "true" if first_time else "false",
+        "price": inputs["price"], "years": sc["years"], "postal": inputs.get("postal", "M2J 0E8"),
+        "age": inputs.get("age", 35), "income": inputs.get("income", 120000.0),
+        "strategy": inputs.get("strategy", "shelter-first"),
+        "first_time": "true" if inputs.get("first_time") else "false",
     })
 
-    # Save-scenario panel + script, only for signed-in users.
-    user = _current_user(request)
-    savebox, save_script = "", ""
-    if user:
-        save_inputs: dict = {
-            "price": price, "down": down, "years": sc["years"], "postal": postal,
-            "age": age, "income": income, "strategy": strategy, "first_time": first_time,
-        }
-        for k, v in (("rate", rate), ("appreciation", appreciation), ("rent", rent),
-                     ("rent_growth", rent_growth), ("property_tax_rate", property_tax_rate),
-                     ("investment_return", investment_return), ("retirement_rate", retirement_rate)):
-            if v is not None:
-                save_inputs[k] = v
-        if insurance != 1500.0:
-            save_inputs["insurance"] = insurance
-        if hoa != 0.0:
-            save_inputs["hoa"] = hoa
-
+    # Save panel (signed-in) + share panel (DB on) — both hidden on read-only pages.
+    savebox = sharebox = ""
+    if user and not readonly:
         sid_name = ""
         if sid is not None:
             existing = scenarios.get(sid, user["id"])
@@ -1343,10 +1537,23 @@ def evaluate(
             '<span class="save-status" id="save-status"></span>'
             '</section>'
         )
-        save_script = (
+    if _DB_ON and not readonly:
+        sharebox = (
+            '<section class="savebox sharebox">'
+            '<h2>Share</h2>'
+            '<button type="button" onclick="shareScenario()">Create link</button>'
+            '<input type="text" id="share-link" class="share-link" readonly '
+            'style="display:none" onclick="this.select()">'
+            '<span class="save-status" id="share-status"></span>'
+            '</section>'
+        )
+
+    result_script = ""
+    if (user or _DB_ON) and not readonly:
+        result_script = (
             "var SCEN_ID=" + (str(int(sid)) if sid is not None else "null") + ";\n"
-            "var SAVE_INPUTS=" + json.dumps(save_inputs) + ";\n"
-            + SAVE_SCRIPT_BODY + "\n"
+            "var RESULT_INPUTS=" + json.dumps(inputs) + ";\n"
+            + RESULT_SCRIPT_BODY + "\n"
         )
 
     script = (
@@ -1356,13 +1563,15 @@ def evaluate(
         "var BASE=" + base_js + ";\n"
         + CHARTS_SCRIPT_BODY + "\n"
         + WHATIF_SCRIPT_BODY + "\n"
-        + save_script + "</script>"
+        + result_script + "</script>"
     )
 
-    body = (
+    return (
         PAGE_HEAD
+        + shared_note
         + banner
         + savebox
+        + sharebox
         + stats
         + whatif
         + imgs
@@ -1372,7 +1581,75 @@ def evaluate(
         + script
         + PAGE_FOOT
     )
-    return HTMLResponse(_page(body, user))
+
+
+def _inputs_from_args(price, down, years, postal, age, income, strategy, first_time,
+                      rate, appreciation, rent, rent_growth, property_tax_rate,
+                      investment_return, insurance, hoa, retirement_rate) -> dict:
+    """Collapse evaluate's args into a compact inputs dict (drop defaults)."""
+    inputs: dict = {
+        "price": price, "down": down, "years": years, "postal": postal,
+        "age": age, "income": income, "strategy": strategy, "first_time": first_time,
+    }
+    for k, v in (("rate", rate), ("appreciation", appreciation), ("rent", rent),
+                 ("rent_growth", rent_growth), ("property_tax_rate", property_tax_rate),
+                 ("investment_return", investment_return), ("retirement_rate", retirement_rate)):
+        if v is not None:
+            inputs[k] = v
+    if insurance != 1500.0:
+        inputs["insurance"] = insurance
+    if hoa != 0.0:
+        inputs["hoa"] = hoa
+    return inputs
+
+
+@app.get("/evaluate", response_class=HTMLResponse)
+def evaluate(
+    request: Request,
+    price: float,
+    down: str = "20%",
+    years: int = 30,
+    postal: str = "M2J 0E8",
+    # Tax layer: registered-account sheltering + capital-gains tax.
+    age: int = 35,
+    income: float = 120000.0,
+    strategy: str = "shelter-first",
+    first_time: bool = False,
+    # Optional power-user overrides (default to regional data when omitted).
+    rate: float | None = None,
+    appreciation: float | None = None,
+    rent: float | None = None,
+    rent_growth: float | None = None,
+    property_tax_rate: float | None = None,
+    investment_return: float | None = None,
+    insurance: float = 1500.0,
+    hoa: float = 0.0,
+    retirement_rate: float | None = None,
+    sid: int | None = None,   # set when reopening a saved scenario (for "Update")
+    _: None = Depends(require_auth),
+):
+    try:
+        sc = _run_scenario(
+            price=price, down=down, years=years, postal=postal,
+            age=age, income=income, strategy=strategy, first_time=first_time,
+            rate=rate, appreciation=appreciation, rent=rent, rent_growth=rent_growth,
+            property_tax_rate=property_tax_rate, investment_return=investment_return,
+            insurance=insurance, hoa=hoa, retirement_rate=retirement_rate,
+        )
+    except ValueError as exc:
+        return _error_page(str(exc))
+
+    inputs = _inputs_from_args(price, down, years, postal, age, income, strategy,
+                               first_time, rate, appreciation, rent, rent_growth,
+                               property_tax_rate, investment_return, insurance, hoa,
+                               retirement_rate)
+    user = _current_user(request)
+    if user:  # auto-save to run history (deduped + pruned)
+        try:
+            history.record_run(user["id"], _sanitize_inputs(inputs), _snapshot(sc))
+        except Exception:  # noqa: BLE001 - history is best-effort
+            pass
+    return HTMLResponse(_page(_render_result_html(sc, inputs, user=user, sid=sid), user))
 
 
 @app.get("/api/recompute")

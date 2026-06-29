@@ -152,6 +152,15 @@ page (it captures the current what-if slider state) and a **My scenarios** page
 (`/scenarios`) to reopen, rename, or delete saved runs. Each scenario stores its
 inputs plus a small result snapshot; reopening re-runs it via `/evaluate?…&sid=`.
 
+**Run history, compare & sharing** (also signed-in, except viewing shares):
+- **My runs** (`/history`) — every evaluation is auto-recorded (deduped, last 50);
+  reopen one or save it as a named scenario.
+- **Compare** — tick 2–4 on the scenarios page and hit *Compare selected*
+  (`/compare?ids=`) for a side-by-side metrics table plus an overlay chart of each
+  scenario's buyer-vs-renter net-worth gap.
+- **Share** — a *Share* button mints a short read-only link (`/r/<slug>`) that
+  anyone can open without an account.
+
 ## Data vintage & caveats
 
 Regional figures were gathered 2026-06-25 (sources cited in `evaluator/data.py`).

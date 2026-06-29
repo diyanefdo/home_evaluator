@@ -35,9 +35,9 @@ it's a menu to prioritize from.
 | **Persistence layer** ✅ | **DONE.** PostgreSQL in its own container (`db` service, named volume `evaluator-pgdata`, `depends_on: service_healthy`). App connects via `EVALUATOR_DB` (`postgresql+psycopg://…@db:5432/…`); `evaluator/db.py` creates tables on startup via SQLModel. Fully opt-in — unset `EVALUATOR_DB` ⇒ stateless as before. | M | Foundational |
 | **User accounts** ✅ | **DONE (Google OAuth).** Sign-in via Authlib + signed-cookie sessions; `User` model keyed by Google `sub` (`evaluator/models.py` / `accounts.py`); `/login`, `/auth/google/callback`, `/logout` + a top-right auth widget. Additive (basic-auth untouched); lights up only when `GOOGLE_CLIENT_ID/SECRET` + DB are set. **Next:** gate saved data behind login. | M | High |
 | **Saved scenarios** ✅ | **DONE.** `Scenario` table (`models.py`) + ownership-scoped CRUD (`scenarios.py`); a "Save scenario" panel on the results page (captures current slider state), a `/scenarios` list page, and open / rename / delete. Reopen restores all inputs via `/evaluate?…&sid=`. | M | High |
-| **Scenario history / "my runs"** | Auto-save every evaluation to the user's history with a timestamp; let them revisit or re-run. | S–M | Medium |
-| **Compare scenarios** | Pick 2–4 saved scenarios and render them side-by-side (e.g. buy-now vs wait-2-years, 20% vs 35% down, two neighbourhoods). | M | High |
-| **Shareable result links** | Persist a result under a short slug (`/r/ab12cd`) so a scenario can be shared read-only without an account. | S | Medium |
+| **Scenario history / "my runs"** ✅ | **DONE.** `RunHistory` table; every signed-in `/evaluate` is auto-recorded (deduped vs the last run, pruned to 50). `/history` page lists them with Open / Save-as-scenario. | S–M | Medium |
+| **Compare scenarios** ✅ | **DONE.** Tick 2–4 on `/scenarios` → `/compare?ids=`: a metrics table per scenario + an overlay Plotly chart of each one's buyer-minus-renter net-worth gap over time. | M | High |
+| **Shareable result links** ✅ | **DONE.** `SharedResult` table; a **Share** button mints `/r/<slug>` (short token), a read-only results page anyone can open without an account. | S | Medium |
 | **Usage tracking / analytics** | Record per-run metadata (inputs, region, timestamp, anonymized user) to a table; build a small admin dashboard (most-queried postal codes, price ranges, buy-vs-rent verdict distribution). | M | Medium (product insight) |
 
 **Dependencies:** persistence layer first, then accounts, then the rest.
@@ -290,8 +290,8 @@ A pragmatic order that front-loads value and respects dependencies:
 **Phase 2 — Go stateful (the platform shift)**
 - ✅ PostgreSQL in a separate container (volume-mounted) + real accounts (Google OAuth).
 - ✅ Saved scenarios (name, save, list, reopen, rename, delete).
-- Run history, shareable links. *(next)*
-- Basic usage analytics / admin dashboard.
+- ✅ Run history ("my runs"), compare scenarios, shareable result links.
+- Basic usage analytics / admin dashboard. *(next)*
 
 **Phase 3 — Live market data (the wow factor)**
 - Improve assumptions from free aggregate sources (CMHC rents, Teranet/StatCan
