@@ -582,3 +582,11 @@ the open button size is biggern than the rename and delete buttons in saved scen
 ## 2026-06-28 20:05:12
 
 commit and push
+
+## 2026-06-28 20:12:30
+
+similar case with saved scenario and Name it first buttons. they dont look the same size and are misaligned
+
+## 2026-06-28 20:14:14
+
+commit and push
