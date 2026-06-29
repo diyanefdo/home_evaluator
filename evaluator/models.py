@@ -61,3 +61,19 @@ class SharedResult(SQLModel, table=True):
     inputs: dict = Field(default_factory=dict, sa_column=Column(JSON))
     snapshot: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_utcnow)
+
+
+class UsageEvent(SQLModel, table=True):
+    """One evaluation, anonymized — for usage analytics. No personal data."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    created_at: datetime = Field(default_factory=_utcnow, index=True)
+    fsa: str | None = Field(default=None, index=True)   # postal forward-sortation area
+    region: str | None = None
+    price: float | None = None
+    down_pct: float | None = None
+    years: int | None = None
+    verdict: str | None = None      # "buyer" or "renter"
+    gap: float | None = None        # |buyer − renter| at term end
+    after_tax: bool = False
+    signed_in: bool = False         # was the run by a logged-in user (no id stored)

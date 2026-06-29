@@ -161,6 +161,15 @@ inputs plus a small result snapshot; reopening re-runs it via `/evaluate?…&sid
 - **Share** — a *Share* button mints a short read-only link (`/r/<slug>`) that
   anyone can open without an account.
 
+**Methodology page:** `/methodology` explains the model, assumptions, data sources
+(rendered from the code's `SOURCES`), and limitations; a site-wide footer carries
+the "not financial advice" disclaimer and links to it.
+
+**Admin analytics:** every evaluation is logged anonymized (region, price range,
+verdict — no personal data, just a signed-in flag). Emails listed in
+`EVALUATOR_ADMIN_EMAILS` can view the **`/admin`** dashboard (totals, recent
+activity, verdict split, price ranges, top postal areas/regions).
+
 ## Data vintage & caveats
 
 Regional figures were gathered 2026-06-25 (sources cited in `evaluator/data.py`).

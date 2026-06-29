@@ -23,6 +23,7 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - EVALUATOR_SECRET_KEY=${EVALUATOR_SECRET_KEY:-}
       - EVALUATOR_OAUTH_REDIRECT=${EVALUATOR_OAUTH_REDIRECT:-}
+      - EVALUATOR_ADMIN_EMAILS=${EVALUATOR_ADMIN_EMAILS:-}
     depends_on:
       db:
         condition: service_healthy

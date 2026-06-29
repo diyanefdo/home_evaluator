@@ -38,7 +38,7 @@ it's a menu to prioritize from.
 | **Scenario history / "my runs"** ✅ | **DONE.** `RunHistory` table; every signed-in `/evaluate` is auto-recorded (deduped vs the last run, pruned to 50). `/history` page lists them with Open / Save-as-scenario. | S–M | Medium |
 | **Compare scenarios** ✅ | **DONE.** Tick 2–4 on `/scenarios` → `/compare?ids=`: a metrics table per scenario + an overlay Plotly chart of each one's buyer-minus-renter net-worth gap over time. | M | High |
 | **Shareable result links** ✅ | **DONE.** `SharedResult` table; a **Share** button mints `/r/<slug>` (short token), a read-only results page anyone can open without an account. | S | Medium |
-| **Usage tracking / analytics** | Record per-run metadata (inputs, region, timestamp, anonymized user) to a table; build a small admin dashboard (most-queried postal codes, price ranges, buy-vs-rent verdict distribution). | M | Medium (product insight) |
+| **Usage tracking / analytics** ✅ | **DONE.** `UsageEvent` table records anonymized per-run metadata (FSA, region, price, verdict — no user id, just a signed-in flag); `analytics.py` aggregates. `/admin` dashboard (gated by `EVALUATOR_ADMIN_EMAILS`) shows totals, recent activity, verdict split, price ranges, and top FSAs/regions. | M | Medium (product insight) |
 
 **Dependencies:** persistence layer first, then accounts, then the rest.
 **Risks/notes:** storing user financials = **PII**. Encrypt at rest, document a
@@ -285,13 +285,13 @@ A pragmatic order that front-loads value and respects dependencies:
 - ✅ CMHC default insurance for <20% down — done (`tax.cmhc_insurance`; premium
   financed into the loan, PST up front, >$1.5M / below-minimum-down rejected).
 - Automated tests + CI for the engine. *(remaining)*
-- Methodology/transparency page + clearer disclaimers. *(remaining)*
+- ✅ Methodology/transparency page (`/methodology`) + clearer site-wide disclaimer.
 
 **Phase 2 — Go stateful (the platform shift)**
 - ✅ PostgreSQL in a separate container (volume-mounted) + real accounts (Google OAuth).
 - ✅ Saved scenarios (name, save, list, reopen, rename, delete).
 - ✅ Run history ("my runs"), compare scenarios, shareable result links.
-- Basic usage analytics / admin dashboard. *(next)*
+- ✅ Basic usage analytics / admin dashboard (`/admin`).
 
 **Phase 3 — Live market data (the wow factor)**
 - Improve assumptions from free aggregate sources (CMHC rents, Teranet/StatCan

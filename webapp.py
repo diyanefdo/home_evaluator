@@ -26,14 +26,14 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 
-from evaluator import cli, projections, tax
+from evaluator import cli, data, projections, tax
 
 # Optional Phase 2 stack (persistence + Google OAuth). Imported defensively so the
 # app still runs as a stateless tool when the extra deps aren't installed.
 try:
     from starlette.middleware.sessions import SessionMiddleware
     from authlib.integrations.starlette_client import OAuth, OAuthError
-    from evaluator import db as eval_db, accounts, scenarios, history, shares
+    from evaluator import db as eval_db, accounts, scenarios, history, shares, analytics
     _ACCOUNTS_IMPORTABLE = True
 except Exception:  # noqa: BLE001 - any import problem just disables accounts
     _ACCOUNTS_IMPORTABLE = False
@@ -86,6 +86,8 @@ _GOOGLE_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
 _GOOGLE_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
 _OAUTH_ON = bool(_DB_ON and _GOOGLE_ID and _GOOGLE_SECRET)
 _SECRET_KEY = os.environ.get("EVALUATOR_SECRET_KEY", "").strip() or secrets.token_hex(32)
+# Comma-separated emails allowed to view /admin (the analytics dashboard).
+_ADMIN_EMAILS = {e.strip().lower() for e in os.environ.get("EVALUATOR_ADMIN_EMAILS", "").split(",") if e.strip()}
 
 _oauth = None
 if _OAUTH_ON:
@@ -127,15 +129,22 @@ def _current_user(request: Request) -> dict | None:
         return None
 
 
+def _is_admin(user: dict | None) -> bool:
+    return bool(user and (user.get("email") or "").lower() in _ADMIN_EMAILS)
+
+
 def _auth_bar(user: dict | None) -> str:
     """Top-right sign-in / signed-in widget. Empty when accounts are disabled."""
     if not _OAUTH_ON:
         return ""
     if user:
         who = html.escape(user.get("name") or user.get("email") or "Account")
+        admin_link = ('<a class="authbtn ghost" href="/admin">Admin</a>'
+                      if _is_admin(user) else "")
         return (f'<div class="authbar"><span class="who">{who}</span>'
                 f'<a class="authbtn ghost" href="/history">My runs</a>'
                 f'<a class="authbtn ghost" href="/scenarios">My scenarios</a>'
+                f'{admin_link}'
                 f'<a class="authbtn" href="/logout">Sign out</a></div>')
     return ('<div class="authbar">'
             '<a class="authbtn" href="/login">Sign in with Google</a></div>')
@@ -526,9 +535,46 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
  .shared-note a{color:var(--brand-dark)}
  .sharebox .share-link{flex:1 1 240px;min-width:160px;font-family:ui-monospace,monospace;
    font-size:.85rem;color:var(--ink)}
+ /* methodology / prose page */
+ .prose{max-width:760px;margin:0 auto}
+ .prose h2{font-size:1.25rem;color:var(--ink);margin:1.8rem 0 .5rem;
+   padding-top:1.2rem;border-top:1px solid var(--line)}
+ .prose h2:first-of-type{border-top:0;padding-top:0;margin-top:.6rem}
+ .prose h3{font-size:.98rem;color:var(--ink);margin:1.1rem 0 .35rem}
+ .prose p{color:#33435a;line-height:1.62;margin:.5rem 0}
+ .prose ul{color:#33435a;line-height:1.6;padding-left:1.2rem;margin:.5rem 0}
+ .prose li{margin:.32rem 0}
+ .prose a{color:var(--brand-dark);word-break:break-word}
+ .prose code{background:#eef3f8;padding:.1rem .35rem;border-radius:5px;font-size:.86em}
+ /* global footer / disclaimer */
+ .site-foot{max-width:1000px;margin:2.6rem auto 0;padding:1.3rem 1rem 0;
+   border-top:1px solid var(--line);color:var(--muted);font-size:.85rem;line-height:1.55}
+ .site-foot p{margin:.4rem 0}
+ .site-foot a{color:var(--brand-dark);font-weight:600}
+ /* admin dashboard */
+ .admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+   gap:1rem;margin:1.2rem 0}
+ .admin-card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+   padding:1.1rem 1.2rem;box-shadow:0 4px 14px rgba(8,40,64,.05)}
+ .admin-card h2{font-size:1rem;color:var(--ink);margin:0 0 .8rem}
+ .bar-row{display:flex;align-items:center;gap:.6rem;margin:.4rem 0;font-size:.88rem}
+ .bar-label{flex:0 0 38%;color:var(--ink);font-weight:600;overflow:hidden;
+   text-overflow:ellipsis;white-space:nowrap}
+ .bar-track{flex:1 1 auto;height:9px;background:#eef3f8;border-radius:999px;overflow:hidden}
+ .bar-fill{display:block;height:100%;background:var(--brand);border-radius:999px}
+ .bar-num{flex:0 0 auto;color:var(--muted);font-weight:600;min-width:64px;text-align:right}
+ .bar-num small{font-weight:500}
 </style></head><body>"""
 
-PAGE_FOOT = "</body></html>"
+PAGE_FOOT = (
+    '<footer class="site-foot">'
+    '<p><strong>Not financial advice.</strong> This is an educational estimate based on '
+    'long-run historical assumptions and the numbers you enter &mdash; real outcomes will '
+    'differ, and past investment returns do not guarantee future results. Before making a '
+    'decision, consult a licensed financial advisor, mortgage broker, and tax professional.</p>'
+    '<p><a href="/methodology">How it works, assumptions &amp; data sources &rarr;</a></p>'
+    '</footer></body></html>'
+)
 
 # What-if sliders behaviour. BASE (the fixed inputs) is injected per-result; this
 # is the static part. Sliders update their value labels instantly and, debounced,
@@ -1081,6 +1127,216 @@ def healthz() -> dict:
 
 
 # --------------------------------------------------------------------------- #
+# Methodology / transparency page
+# --------------------------------------------------------------------------- #
+def _linkify(text: str) -> str:
+    """Escape text and turn bare http(s) URLs into links."""
+    out = []
+    for tok in str(text).split(" "):
+        if tok.startswith("http"):
+            url = html.escape(tok)
+            out.append(f'<a href="{url}" target="_blank" rel="noopener">{url}</a>')
+        else:
+            out.append(html.escape(tok))
+    return " ".join(out)
+
+
+def _sources_html() -> str:
+    blocks = ""
+    for title, src in (("Market & regional data (evaluator/data.py)", data.SOURCES),
+                       ("Tax, insurance & transaction costs (evaluator/tax.py)", tax.SOURCES)):
+        items = "".join(
+            f'<li><b>{html.escape(k.replace("_", " "))}:</b> {_linkify(v)}</li>'
+            for k, v in src.items()
+        )
+        blocks += f"<h3>{html.escape(title)}</h3><ul>{items}</ul>"
+    return blocks
+
+
+def _methodology_html() -> str:
+    return (
+        PAGE_HEAD
+        + '<section class="hero"><div class="hero-copy">'
+        + '<span class="eyebrow"><span class="dot"></span> Transparency</span>'
+        + '<h1>How this evaluator works</h1>'
+        + '<p>The model, the assumptions behind every number, where the data comes '
+        + 'from, and what it deliberately leaves out.</p>'
+        + '</div></section>'
+        + '<div class="prose">'
+
+        + '<h2>What it does</h2>'
+        + '<p>It compares two paths over your mortgage term: <b>buying</b> a home, versus '
+        + '<b>renting and investing</b> the money you would have spent on ownership. Both '
+        + 'people spend the same amount each month, so it is an apples-to-apples comparison. '
+        + 'The headline is each path&rsquo;s projected <b>after-tax net worth</b> at the end '
+        + 'of the term, and the year (if any) when one overtakes the other.</p>'
+
+        + '<h2>How the comparison is kept fair</h2>'
+        + '<ul>'
+        + '<li><b>Matched cash flows.</b> The buyer pays mortgage P&amp;I, property tax, '
+        + 'insurance, condo fees and maintenance. In the early years ownership usually costs '
+        + 'more than rent, so the <i>renter</i> invests the difference. After the '
+        + '&ldquo;crossover&rdquo; year &mdash; when rising rent passes the (largely fixed) '
+        + 'ownership cost &mdash; the <i>owner</i> invests the difference instead.</li>'
+        + '<li><b>Up-front cash.</b> The renter also invests what the buyer sank into the '
+        + 'down payment and closing costs, so neither side gets a free head start.</li>'
+        + '<li><b>One lump at the end.</b> Net worth = the owner&rsquo;s home equity (net of '
+        + 'selling costs) plus their side investments, versus the renter&rsquo;s portfolio &mdash; '
+        + 'each taxed appropriately (below).</li>'
+        + '</ul>'
+
+        + '<h2>The buying side</h2>'
+        + '<ul>'
+        + '<li><b>Mortgage:</b> fixed-rate, fully amortizing over the term (monthly P&amp;I).</li>'
+        + '<li><b>Home value:</b> grows at a regional appreciation rate.</li>'
+        + '<li><b>Carrying costs:</b> property tax (grows yearly), insurance, condo/HOA fees, '
+        + 'and maintenance as a % of the home&rsquo;s value.</li>'
+        + '<li><b>CMHC insurance</b> when the down payment is under 20% (premium financed into '
+        + 'the loan; PST on it paid up front; homes over $1.5M can&rsquo;t be insured).</li>'
+        + '</ul>'
+
+        + '<h2>The renting + investing side</h2>'
+        + '<p>Rent starts at a regional figure and grows each year. Whatever the renter saves '
+        + 'versus owning is invested in a broad stock index at a long-run nominal return '
+        + '(dividends included). The owner does the same with any surplus after crossover.</p>'
+
+        + '<h2>Tax layer</h2>'
+        + '<ul>'
+        + '<li><b>Registered accounts:</b> your age sets cumulative <b>TFSA</b> room; your '
+        + 'income sets annual <b>RRSP</b> room and your marginal rate. The '
+        + '&ldquo;shelter-first&rdquo; strategy fills TFSA, then RRSP, then a taxable account; '
+        + 'RRSP refunds are reinvested and withdrawals taxed at a lower retirement rate.</li>'
+        + '<li><b>Capital gains</b> on the taxable portion use the 50% inclusion rate.</li>'
+        + '<li><b>Principal-residence exemption:</b> the home&rsquo;s own gain is tax-free on '
+        + 'sale, so only the side investments are taxed.</li>'
+        + '</ul>'
+
+        + '<h2>Transaction costs</h2>'
+        + '<p>At purchase: land-transfer tax (Ontario provincial, plus Toronto&rsquo;s municipal '
+        + 'LTT inside the city) and legal/inspection fees &mdash; with first-time-buyer rebates '
+        + 'where applicable. At sale: ~5% realtor commission + HST + legal. The buyer&rsquo;s '
+        + 'up-front costs are credited to the renter&rsquo;s invested lump to keep things fair.</p>'
+
+        + '<h2>Where the numbers come from</h2>'
+        + '<p>Regional assumptions are matched to your postal code: researched values for '
+        + 'Toronto/North York and 10 Ontario CMAs (Ottawa, Hamilton, Kitchener&ndash;Waterloo, '
+        + 'London, Windsor, Oshawa, Barrie, Kingston, Guelph, St.&nbsp;Catharines&ndash;Niagara), '
+        + 'an Ontario-wide tier, then a national fallback. The <b>5-year mortgage rate is live</b> '
+        + 'from the Bank of Canada (cached, with an offline fallback). Anything regional can be '
+        + 'overridden on the form.</p>'
+        + _sources_html()
+
+        + '<h2>Key assumptions</h2>'
+        + '<ul>'
+        + '<li>Rates (appreciation, rent growth, returns) are <b>long-run averages</b> applied '
+        + 'smoothly &mdash; the real world is volatile and path-dependent.</li>'
+        + '<li>The mortgage rate is held fixed for the whole term (no renewal-rate changes).</li>'
+        + '<li>Insurance and condo fees are held flat in nominal terms.</li>'
+        + '<li>Rent for a comparable home is a single figure, not a range.</li>'
+        + '</ul>'
+
+        + '<h2>What it deliberately leaves out</h2>'
+        + '<ul>'
+        + '<li><b>Horizon:</b> the comparison runs to the end of the mortgage term. A renter '
+        + 'could of course buy later; net worth at the term end is a complete snapshot, so '
+        + 'terminal value / imputed rent beyond the term is out of scope.</li>'
+        + '<li>Volatility and sequence-of-returns risk (a single average return is used; the '
+        + 'sensitivity heatmap shows how the verdict shifts across assumptions).</li>'
+        + '<li>Lifestyle factors, mobility, maintenance effort, and non-financial value.</li>'
+        + '<li>Province-specific land-transfer rules outside Ontario (an Ontario proxy is used).</li>'
+        + '</ul>'
+        + '<p>See <code>knowledge/METHODOLOGY_GAPS.md</code> in the repository for the detailed '
+        + 'list of modelling gaps and decisions.</p>'
+
+        + '</div>'
+        + '<p style="text-align:center;margin:1.5rem 0"><a class="back" href="/">'
+        + '&larr; Back to the evaluator</a></p>'
+        + PAGE_FOOT
+    )
+
+
+@app.get("/methodology", response_class=HTMLResponse)
+def methodology(request: Request, _: None = Depends(require_auth)):
+    return HTMLResponse(_page(_methodology_html(), _current_user(request)))
+
+
+# --------------------------------------------------------------------------- #
+# Admin analytics dashboard (restricted to EVALUATOR_ADMIN_EMAILS)
+# --------------------------------------------------------------------------- #
+def _require_admin(request: Request) -> dict:
+    user = _require_login(request)   # 404 if accounts off, 401 if not signed in
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Admins only.")
+    return user
+
+
+def _bar_rows(pairs, total: int) -> str:
+    """Render label / count rows with a proportional bar."""
+    out = ""
+    top = max((c for _, c in pairs), default=0) or 1
+    for label, count in pairs:
+        pct = (count / total * 100) if total else 0
+        w = count / top * 100
+        out += (
+            '<div class="bar-row"><span class="bar-label">' + html.escape(str(label)) + '</span>'
+            f'<span class="bar-track"><span class="bar-fill" style="width:{w:.0f}%"></span></span>'
+            f'<span class="bar-num">{count} <small>({pct:.0f}%)</small></span></div>'
+        )
+    return out or '<p class="scen-meta">No data yet.</p>'
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_dashboard(request: Request):
+    user = _require_admin(request)
+    a = analytics.summary()
+    total = a["total"]
+
+    def tile(label, value):
+        return (f'<div class="stat"><span class="k">{label}</span>'
+                f'<span class="v">{value}</span></div>')
+
+    tiles = (
+        '<div class="result-summary reveal">'
+        + tile("Total runs", f'{total:,}')
+        + tile("Last 7 days", f'{a["last_7"]:,}')
+        + tile("Last 30 days", f'{a["last_30"]:,}')
+        + tile("Buying wins", f'{a["buy"]:,}')
+        + tile("Renting wins", f'{a["rent"]:,}')
+        + tile("Signed-in", f'{a["signed_in"]:,}')
+        + tile("Anonymous", f'{a["anonymous"]:,}')
+        + '</div>'
+    )
+
+    sections = (
+        '<div class="admin-grid">'
+        + '<section class="admin-card"><h2>Verdict split</h2>'
+        + _bar_rows([("Buying", a["buy"]), ("Renting", a["rent"])], a["buy"] + a["rent"]) + '</section>'
+        + '<section class="admin-card"><h2>Sign-in</h2>'
+        + _bar_rows([("Signed-in", a["signed_in"]), ("Anonymous", a["anonymous"])],
+                    a["signed_in"] + a["anonymous"]) + '</section>'
+        + '<section class="admin-card"><h2>Price range</h2>'
+        + _bar_rows(a["price_buckets"], total) + '</section>'
+        + '<section class="admin-card"><h2>Top postal areas (FSA)</h2>'
+        + _bar_rows(a["top_fsa"], total) + '</section>'
+        + '<section class="admin-card"><h2>Top regions</h2>'
+        + _bar_rows(a["top_region"], total) + '</section>'
+        + '</div>'
+    )
+
+    body = (
+        PAGE_HEAD
+        + '<section class="hero"><div class="hero-copy">'
+        + '<span class="eyebrow"><span class="dot"></span> Admin</span>'
+        + '<h1>Usage analytics</h1><p>Anonymized evaluation activity. No personal data '
+        + 'is stored &mdash; only region, price range, and the verdict.</p></div></section>'
+        + tiles + sections
+        + '<p><a class="back" href="/">&larr; Back to the evaluator</a></p>'
+        + PAGE_FOOT
+    )
+    return HTMLResponse(_page(body, user))
+
+
+# --------------------------------------------------------------------------- #
 # Google OAuth sign-in (only registered when accounts are enabled).
 # --------------------------------------------------------------------------- #
 @app.get("/login")
@@ -1580,9 +1836,8 @@ def _render_result_html(sc: dict, inputs: dict, *, user: dict | None = None,
         + stats
         + whatif
         + imgs
-        + '<p><a class="back" href="/">&larr; Run another scenario</a></p>'
-        + '<p class="disclaimer">Projections use long-run historical assumptions '
-        + 'and are not financial advice.</p>'
+        + '<p><a class="back" href="/">&larr; Run another scenario</a> '
+        + '&middot; <a class="back" href="/methodology">How this works</a></p>'
         + script
         + PAGE_FOOT
     )
@@ -1653,6 +1908,16 @@ def evaluate(
         try:
             history.record_run(user["id"], _sanitize_inputs(inputs), _snapshot(sc))
         except Exception:  # noqa: BLE001 - history is best-effort
+            pass
+    if _DB_ON:  # anonymized usage analytics (no personal data)
+        try:
+            analytics.record(
+                fsa=data._fsa(postal), region=sc["params"]["region_label"],
+                price=float(price), down_pct=round(sc["pct"], 1), years=int(sc["years"]),
+                verdict=sc["leader"], gap=abs(sc["gap"]), after_tax=bool(sc["after_tax"]),
+                signed_in=bool(user),
+            )
+        except Exception:  # noqa: BLE001 - analytics is best-effort
             pass
     return HTMLResponse(_page(_render_result_html(sc, inputs, user=user, sid=sid), user))
 
