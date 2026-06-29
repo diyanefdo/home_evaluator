@@ -286,11 +286,11 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
  .field{display:flex;flex-direction:column}
  .field small{color:var(--muted);font-size:.78rem;margin-top:.35rem;font-weight:400}
  /* 16px input font stops iOS Safari from auto-zooming on focus */
- input:not([type=range]),select{width:100%;padding:.7rem .8rem;border:1px solid #cfd9e4;
+ input:not([type=range]):not([type=checkbox]),select{width:100%;padding:.7rem .8rem;border:1px solid #cfd9e4;
    border-radius:10px;font-size:16px;background:#fbfdff;color:var(--ink);
    transition:border-color .15s,box-shadow .15s,background .15s}
- input:not([type=range]):hover,select:hover{border-color:#aebfd2}
- input:not([type=range]):focus,select:focus{outline:none;border-color:var(--brand);
+ input:not([type=range]):not([type=checkbox]):hover,select:hover{border-color:#aebfd2}
+ input:not([type=range]):not([type=checkbox]):focus,select:focus{outline:none;border-color:var(--brand);
    box-shadow:0 0 0 3px rgba(31,119,180,.18);background:#fff}
  /* auto-fit collapses the form from 2 columns to 1 on narrow screens */
  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.1rem}
@@ -492,7 +492,8 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
  .scen-card .scen-actions{display:flex;gap:.5rem;flex-wrap:wrap}
  .scen-card .scen-actions a,.scen-card .scen-actions button{
    display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;margin:0;
-   line-height:1;font-family:inherit;padding:.5rem .85rem;border-radius:9px;min-width:5.25rem;
+   line-height:1;font-family:inherit;padding:.5rem .85rem;border-radius:9px;
+   width:auto;min-width:5.25rem;
    font-size:.85rem;font-weight:700;text-decoration:none;cursor:pointer;
    border:1px solid var(--line);background:#fbfdff;color:var(--brand)}
  .scen-card .scen-form{display:inline-flex}
@@ -502,7 +503,8 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
  .scen-empty{color:var(--muted);background:var(--card);border:1px dashed var(--line);
    border-radius:14px;padding:2rem;text-align:center;margin:1.2rem 0}
  .scen-form{display:inline}
- .scen-pick{width:18px;height:18px;flex:0 0 auto;accent-color:var(--brand);cursor:pointer}
+ .scen-pick{width:18px;height:18px;flex:0 0 auto;margin:0;align-self:center;
+   accent-color:var(--brand);cursor:pointer}
  /* compare bar + table */
  .cmp-bar{display:flex;align-items:center;justify-content:space-between;gap:1rem;
    flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:12px;
