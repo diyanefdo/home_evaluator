@@ -470,10 +470,10 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
    background:var(--card);border:1px solid var(--line);border-radius:14px;
    padding:.9rem 1.1rem;margin:.2rem 0 .6rem;box-shadow:0 6px 18px rgba(8,40,64,.06)}
  .savebox h2{font-size:1rem;margin:0;color:var(--ink);flex:0 0 auto}
- .savebox input[type=text]{flex:1 1 200px;min-width:140px;padding:.5rem .7rem;
-   border:1px solid var(--line);border-radius:10px;font-size:15px;background:#fbfdff}
- .savebox button{padding:.55rem 1.1rem;border:0;border-radius:10px;cursor:pointer;
-   font-weight:700;color:#fff;background:var(--brand)}
+ .savebox input[type=text],.savebox button{box-sizing:border-box;font-family:inherit;
+   font-size:15px;line-height:1.2;padding:.55rem .9rem;border-radius:10px;border:1px solid transparent}
+ .savebox input[type=text]{flex:1 1 200px;min-width:140px;border-color:var(--line);background:#fbfdff}
+ .savebox button{flex:0 0 auto;cursor:pointer;font-weight:700;color:#fff;background:var(--brand)}
  .savebox button:hover{filter:brightness(1.07)}
  .savebox .save-status{font-size:.85rem;color:var(--muted)}
  .savebox .save-status.ok{color:#0a7d33}
