@@ -574,3 +574,11 @@ can you work on this now: Saved scenarios    Logged-in users can name and save a
 ## 2026-06-28 17:22:15
 
 commit and push
+
+## 2026-06-28 17:24:10
+
+the open button size is biggern than the rename and delete buttons in saved scenario
+
+## 2026-06-28 20:05:12
+
+commit and push
