@@ -590,3 +590,11 @@ similar case with saved scenario and Name it first buttons. they dont look the s
 ## 2026-06-28 20:14:14
 
 commit and push
+
+## 2026-06-28 20:17:54
+
+can you work on the ideas Scenario history / "my runs", Compare scenarios and Shareable result links thats under Theme 1
+
+## 2026-06-28 21:00:58
+
+commit and push
