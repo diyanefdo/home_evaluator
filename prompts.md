@@ -642,3 +642,11 @@ under "saved scenarios" the checkbox for comparing for each entry is above the r
 ## 2026-06-28 22:15:21
 
 commit and push
+
+## 2026-06-28 22:17:32
+
+can you start working on Methodology/transparency page + clearer disclaimers in phase 1 and then after Basic usage analytics / admin dashboard in Phase 2
+
+## 2026-06-29 00:12:53
+
+commit and push
