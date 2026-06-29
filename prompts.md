@@ -614,3 +614,11 @@ under "my runs" "open" and "save" button have different lengths. make them the s
 ## 2026-06-28 21:09:47
 
 commit and push
+
+## 2026-06-28 21:15:04
+
+when i press "save scenario" without putting down a name for it "Name it first" error appears. the error box is not the same height as the "save scenario" button. can you make it the same height as the "save scenario" button
+
+## 2026-06-28 21:17:53
+
+commit and push
