@@ -650,3 +650,110 @@ can you start working on Methodology/transparency page + clearer disclaimers in 
 ## 2026-06-29 00:12:53
 
 commit and push
+
+## 2026-06-29 00:14:33
+
+how do i access Basic usage analytics / admin dashboard page
+
+## 2026-06-30 00:31:59
+
+is the rent around the postal code that i provide reflective of the area. and also is the rent price reflective for a house of that size and price around the same area ?
+
+## 2026-06-30 00:34:41
+
+i dont want the user to enter more info about the rent. instead i want you to grab mnore accurate rent price of a house of that price in the postal code region so the rent price is more accurate
+
+## 2026-06-30 00:35:01
+
+i dont want the user to enter more info about the rent. instead i want you to grab mnore accurate rent price of a house of that price in the postal code region so the rent price is more accurate and incorporate that in the calculations.
+
+## 2026-06-30 00:41:01
+
+have you also considered the increase in rent prices over the course of the mortgage period in the calculation ?
+
+## 2026-06-30 00:41:09
+
+have you also considered the increase in rent prices for the same house over the course of the mortgage period in the calculation ?
+
+## 2026-06-30 00:43:14
+
+are the home appreciation rates hardcoded? i want the home appreciation rates to be based on the regions or the entered postal code for a house of the given price
+
+## 2026-06-30 00:47:56
+
+are the home appreciation rates more accurate now
+
+## 2026-06-30 00:49:49
+
+run the canada-housing-financial-scraper agent to pull real long-run HPI (Teranet-NBC composite by CMA + CREA benchmark history) for each region, compute a defensible forward-sustainable rate from the actual series, and cite the source per region in SOURCES. do that
+
+## 2026-06-30 00:54:30
+
+<task-notification>
+<task-id>a1ba555c68051ece7</task-id>
+<tool-use-id>toolu_01CxoLwoNjrWbQziH3oEqiYY</tool-use-id>
+<output-file>/tmp/claude-1000/-home-diyanefdo-home-evaluator/53d0c3ab-5873-4763-b0bd-1985e87e54b3/tasks/a1ba555c68051ece7.output</output-file>
+<status>completed</status>
+<summary>Agent "Pull real HPI per CMA, derive appreciation" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Here are the forward-sustainable appreciation rates, with sourcing and honest confidence flags.
+
+## Important data-access caveat (read first)
+
+I anchored to the two series you asked for — **Teranet–National Bank HPI** (composite + metro, base June 2005 = 100) and **CREA MLS HPI / benchmark** — but in this session the live portals blocked machine extraction of the *exact* current index numbers: `housepriceindex.ca` (index-history page and the monthly report PDFs) returned TLS certificate errors, `cbonds.com` returned 403, and CREA's HPI tool only serves data through an interactive `.xlsx` download. So the **boom-era CAGRs below are from Teranet/CREA public reporting + my prior verified retrieval, not freshly re-extracted index levels.** I'd rather tell you that than present a fabricated decimal CAGR. What I *did* confirm live this session: Teranet's metro coverage list, and that the market is mid-correction (Teranet composite **−4.3% YoY** May 2026; Toronto **−8.7% YoY** Apr 2026; Hamilton **−6.6%**; Ottawa-Gatineau **−1.7%**).
+
+Confirmed Teranet coverage (matters for confidence): **Composite-11** = Victoria, Vancouver, Calgary, Edmonton, Winnipeg, **Hamilton, Toronto, Ottawa-Gatineau**, Montréal, Québec City, Halifax. **Kitchener, London, Windsor, Oshawa, Barrie, Kingston, Guelph, St. Catharines-Niagara** exist only in the *extended* CMA set (added in a later expansion → shorter history, lower confidence). KW and London are **not** in the core-11.
+
+## Recommended forward rates
+
+| key | recommended_rate | underlying long-run figure(s) + window | one-line rationale for haircut | confidence |
+|---|---|---|---|---|
+| `TORONTO_M2J` | **0.0450** | Teranet Toronto ~7–8% CAGR (2005–2022 boom); CREA TRREB benchmark ~6% (2005–2024); ~7.08% 1996–2021 | Among the highest price-to-income in N.A.; affordability ceiling + mortgage-rate normalization cap a supply-constrained, high-in-migration market below its boom CAGR | high |
+| `ottawa` | **0.0400** | Teranet Ottawa-Gatineau ~5% CAGR (2005–2024); low volatility | Stable federal-employment base, moderate supply, never a boom market — modest haircut from ~5% | high |
+| `hamilton` | **0.0425** | Teranet Hamilton ~8% CAGR (2005–2022 boom), now −6.6% YoY; CREA RAHB benchmark ~7% (2005–2024) | GTA-spillover demand real but boom was rate-driven; sharp current correction + stretched affordability force a large haircut from ~8% | high |
+| `kitchener_waterloo` | **0.0450** | CREA KWAR benchmark ~6–7% CAGR (2005–2024); Teranet (extended, short history) | Tech-employment base supports demand and it's still cheaper than GTA, but rate-sensitive — haircut from boom ~6.5% | medium |
+| `london` | **0.0425** | CREA LSTAR benchmark ~7–8% peak CAGR (2005–2022, low base); Teranet (extended) | Big % gains came off a low base with elastic SW-Ontario supply; not repeatable forward — haircut hard | medium |
+| `windsor` | **0.0375** | CREA Windsor-Essex benchmark ~7% peak CAGR (low base); Teranet (extended) | Most affordable (headroom) but auto-sector/USMCA-renewal employment risk and elastic supply cap forward growth | medium |
+| `oshawa` | **0.0425** | CREA (via TRREB Durham) benchmark ~6–7% (2005–2024); Teranet (extended, short) | Durham GTA-commuter market, highly rate/commute-sensitive — haircut from boom | medium |
+| `barrie` | **0.0425** | CREA Barrie &amp; District benchmark ~6–7% boom; Teranet (extended, short) | GTA exurb with the largest boom-and-bust swing; commute/rate-sensitive — conservative haircut | medium-low |
+| `kingston` | **0.0375** | CREA Kingston board benchmark ~5–6% (2005–2024); Teranet (extended, short) | Small but stable institutional economy (govt/Queen's/hospital/military); steady, low-ceiling demand → lower steady-state rate | low |
+| `guelph` | **0.0450** | CREA Guelph &amp; District benchmark ~6–7% (2005–2024); Teranet (extended, short) | Strong low-unemployment economy + Greenbelt supply constraint support a higher steady-state than peers | low-medium |
+| `st_catharines_niagara` | **0.0425** | Teranet St. Catharines-Niagara (extended); CREA Niagara benchmark ~7% peak (low base) | Retiree/tourism + GTA &amp; Buffalo spillover boomed from a low base; more elastic supply → haircut | medium |
+| `ONTARIO_DEFAULTS` | **0.0425** | Teranet/CREA Ontario aggregate ~6%+ (2005–2022 boom), now correcting | Province-wide blend of constrained GTA cores and elastic secondary markets, net of rate normalization | high |
+| `NATIONAL_DEFAULTS` | **0.0375** | Teranet Composite-11 ~5.9% (2005–2024), ~7.7% (2005–2022 peak); CREA national HPI | National blend pulls in slower Prairie/Atlantic markets; forward rate well below the boom composite CAGR | high |
+
+## Methodology note (citable)
+
+&gt; Forward rates were derived by taking each market's long-run Teranet–National Bank HPI and CREA MLS HPI benchmark history (anchored to the June-2005=100 base, 2005–2024), identifying the boom-era CAGR (2005–2022) and the longer full-window CAGR, then applying a downward "forward-sustainability" haircut for a 20–30-year horizon. The haircut reflects four structural headwinds absent or weaker over the projection period: the affordability ceiling (price-to-income already near record highs), normalization of mortgage rates after the 2000–2021 secular-decline tailwind, reduced federal immigration targets / demographic softening, and supply elasticity (larger haircut where land is abundant, e.g. SW Ontario, smaller where constrained, e.g. GTA core / Greenbelt). Rates were rounded to the nearest 0.0025 and kept within a defensible 3.75%–4.50% band, consistent with long-run real-return logic of ~1–2% above expected inflation.
+
+## SOURCES dict (drop-in strings)
+
+```
+"teranet_nb_hpi": "Teranet–National Bank House Price Index, composite-11 + extended CMAs, base June 2005=100 — housepriceindex.ca (index-history &amp; monthly reports)",
+"crea_mls_hpi": "CREA MLS Home Price Index / benchmark price, by board — crea.ca/housing-market-stats/mls-home-price-index/hpi-tool/ ; board series at creastats.crea.ca",
+"trreb_hpi": "TRREB MLS HPI (Toronto/Durham/Oshawa) — trreb.ca/market-data/mls-home-price-index/",
+"kwar_hpi": "Kitchener-Waterloo Assoc. of REALTORS HPI dashboard — kwar.ca/hpi-dashboard/",
+"statcan_nhpi": "Statistics Canada, New Housing Price Index, table 18-10-0205 — www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1810020501",
+"teranet_nbc_report": "National Bank of Canada, Teranet-NB HPI monthly economic note — nbc.ca/.../economic-news-teranet.pdf"
+```
+
+## Data gaps &amp; limitations
+
+- Exact current Teranet index levels per metro were **not extracted** this session (TLS/403/interactive-download blocks). To replace the reported-CAGR anchors with computed-from-series CAGRs, download the **CREA HPI `.xlsx`** (board-level, 2005→present) or **StatCan 18-10-0205**, and the Teranet index-history table.
+- **KW, London, Windsor, Oshawa, Barrie, Kingston, Guelph, St. Catharines-Niagara** have only *extended-set* Teranet history (shorter window) → CREA board benchmark is the primary anchor for those; hence medium/low confidence.
+- Kingston/Guelph/Barrie are small boards with thinner series → treat their rates as reasoned estimates, not precise series-derived figures.
+
+## Notes for further analysis
+
+- All 13 markets are in an active 2025–2026 price correction; these forward rates are **trend-line (mid-cycle) assumptions**, not near-term forecasts. If your model has a separate near-term/entry-point assumption, keep the correction there and let these rates govern the long horizon.
+- The line in my earlier Ontario-CMA memory note that lumped appreciation at 0.045–0.05 is now **superseded** by this per-region table.
+
+Updated memory file: `/home/diyanefdo/home_evaluator/.claude/agent-memory/canada-housing-financial-scraper/reference_appreciation_rates.md`
+
+Sources: [Teranet–NB HPI](https://housepriceindex.ca/), [Teranet April-2026 report](https://housepriceindex.ca/2026/05/april2026/), [NBC Teranet note](https://www.nbc.ca/content/dam/bnc/taux-analyses/analyse-eco/logement/economic-news-teranet.pdf), [CREA MLS HPI tool](https://www.crea.ca/housing-market-stats/mls-home-price-index/hpi-tool/), [CREA board stats](https://creastats.crea.ca/board/orea/), [TRREB MLS HPI](https://trreb.ca/market-data/mls-home-price-index/), [KWAR HPI](https://kwar.ca/hpi-dashboard/), [StatCan NHPI 18-10-0205](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1810020501).</result>
+<usage><subagent_tokens>51976</subagent_tokens><tool_uses>22</tool_uses><duration_ms>254318</duration_ms></usage>
+</task-notification>
+
+## 2026-06-30 00:59:17
+
+yes
