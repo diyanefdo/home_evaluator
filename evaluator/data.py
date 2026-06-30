@@ -356,6 +356,16 @@ SOURCES = {
     "trreb_hpi": "TRREB MLS HPI (Toronto/Durham/Oshawa) -- https://trreb.ca/market-data/mls-home-price-index/",
     "kwar_hpi": "Kitchener-Waterloo Assoc. of REALTORS HPI dashboard -- https://kwar.ca/hpi-dashboard/",
     "statcan_nhpi": "Statistics Canada, New Housing Price Index, table 18-10-0205 -- https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1810020501",
+    "nhpi_crosscheck": (
+        "Cross-check (2026-06-30): the per-region forward rates were sanity-checked against actual "
+        "StatCan NHPI CAGRs computed from table 18-10-0205 (Total house+land, 2005-01 -> 2026-05): "
+        "Toronto 2.2%, Ottawa 3.3%, Kitchener-Waterloo 3.1%, London 2.9%, Windsor 2.0%, "
+        "St. Catharines-Niagara 2.3%, Ontario 2.5%, Canada 2.6% (Barrie & Kingston not in NHPI). "
+        "NHPI measures NEW-build contractor prices and is quality-controlled, so it structurally "
+        "UNDERSTATES the resale appreciation an owner realizes (Teranet/CREA resale ran ~6-8% over the "
+        "same window) -- it is a FLOOR, not the modelling basis. The forward rates (3.75-4.50%) sit "
+        "sensibly above this quality-controlled floor and below the un-repeatable resale boom CAGRs."
+    ),
     "teranet_nbc_report": "National Bank of Canada, Teranet-NB HPI monthly economic note -- https://www.nbc.ca/ (economic-news-teranet)",
     "appreciation_methodology": (
         "Forward rates were derived from each market's long-run Teranet-NB HPI and CREA MLS HPI "
