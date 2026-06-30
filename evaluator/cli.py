@@ -68,7 +68,9 @@ def build_engine_params(args: argparse.Namespace) -> dict:
         "maintenance_pct_of_value": region["maintenance_pct_of_value"],
         "insurance_annual": float(args.insurance),
         "hoa_monthly": float(args.hoa),
-        "rent_monthly": _override(args.rent, region["current_monthly_rent"]),
+        # Default rent is derived from THIS home's price within its region (an
+        # expensive home rents for more, a cheap one for less); --rent overrides.
+        "rent_monthly": _override(args.rent, data.estimate_monthly_rent(region, price)),
         "rent_growth_rate": _override(args.rent_growth, region["rent_growth_rate"]),
         "investment_return_rate": _override(args.investment_return, region["sp500_nominal_cagr"]),
         "currency_symbol": "$",

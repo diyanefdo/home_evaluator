@@ -1196,9 +1196,14 @@ def _methodology_html() -> str:
         + '</ul>'
 
         + '<h2>The renting + investing side</h2>'
-        + '<p>Rent starts at a regional figure and grows each year. Whatever the renter saves '
-        + 'versus owning is invested in a broad stock index at a long-run nominal return '
-        + '(dividends included). The owner does the same with any surplus after crossover.</p>'
+        + '<p>The comparable rent is <b>estimated from your home&rsquo;s price within its region</b>, '
+        + 'not a flat regional average: each region has a benchmark price/rent pair, and we scale '
+        + 'the rent by your price using a sub-linear price-to-rent relationship (rent &asymp; '
+        + 'price<sup>0.7</sup>), so a pricier home rents for more and a cheaper one for less &mdash; '
+        + 'but gross rental yields fall as price rises, as they do in reality. That rent then grows '
+        + 'each year. Whatever the renter saves versus owning is invested in a broad stock index at '
+        + 'a long-run nominal return (dividends included). The owner does the same with any surplus '
+        + 'after crossover. (Power users can still override the rent with the slider.)</p>'
 
         + '<h2>Tax layer</h2>'
         + '<ul>'
@@ -1754,6 +1759,9 @@ def _render_result_html(sc: dict, inputs: dict, *, user: dict | None = None,
     r_appr = round(params["appreciation_rate"] * 100, 1)
     r_ret = round(params["investment_return_rate"] * 100, 1)
     r_rent = int(round(params["rent_monthly"]))
+    # Slider ceiling adapts so the (price-derived) default always fits and leaves
+    # headroom to drag higher; min 10k, else ~2x the default rounded up to 1k.
+    rent_max = max(10000, ((r_rent * 2) // 1000 + 1) * 1000)
     whatif = (
         '<section class="whatif" id="whatif">'
         '<h2>What-if &middot; adjust the assumptions <span id="wf-status">updating&hellip;</span></h2>'
@@ -1768,7 +1776,7 @@ def _render_result_html(sc: dict, inputs: dict, *, user: dict | None = None,
         f'<div class="wf-row"><label>Investment return <span class="wf-val" id="wf-ret-val">{r_ret}%</span></label>'
         f'<input type="range" id="s-ret" min="0" max="15" step="0.5" value="{r_ret}"></div>'
         f'<div class="wf-row"><label>Monthly rent <span class="wf-val" id="wf-rent-val">${r_rent:,}</span></label>'
-        f'<input type="range" id="s-rent" min="1000" max="10000" step="100" value="{r_rent}"></div>'
+        f'<input type="range" id="s-rent" min="1000" max="{rent_max}" step="100" value="{r_rent}"></div>'
         '</div>'
         '</section>'
     )

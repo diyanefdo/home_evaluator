@@ -9,13 +9,27 @@ All rates are annual decimals unless noted. Monetary values are CAD.
 See module-level SOURCES for citations.
 """
 
+# Rent does not scale 1:1 with home price: a home worth twice as much does NOT
+# rent for twice as much (luxury homes have lower gross rental yields, starter
+# homes higher). So instead of a flat regional rent, we scale a region's
+# benchmark rent by the entered price using a sub-linear power law:
+#
+#     rent(price) = current_monthly_rent * (price / benchmark_price) ** RENT_PRICE_ELASTICITY
+#
+# Each region pairs current_monthly_rent with the benchmark_price it corresponds
+# to (the region's typical single-family home, 2025-26). An elasticity of 0.7 is
+# the empirical middle of the road for Canadian markets (rent ~ price^0.7); the
+# implied gross yield therefore falls as price rises and rises as price falls.
+RENT_PRICE_ELASTICITY = 0.7
+
 # Toronto / North York (M2J) — researched values
 TORONTO_M2J = {
-    "home_appreciation_rate": 0.05,    # 5.0%/yr; hist GTA CAGR ~7%, set lower for fwd realism (range 4-7%)
+    "home_appreciation_rate": 0.045,   # Teranet TO ~7-8% boom CAGR / CREA ~6%; haircut: affordability ceiling + rate norm. (high conf)
     "maintenance_pct_of_value": 0.01,  # 1% of value/yr; industry range 1-3%
     "current_5yr_fixed_rate": 0.044,   # realistic uninsured $1M; best-available headline ~3.94%
     "mortgage_rate_30yr_avg": 0.055,   # Cdn 5yr fixed 30yr avg; range ~1.9%-8%
     "current_monthly_rent": 3800,      # CAD, comparable detached/large unit in M2J/North York
+    "benchmark_price": 1_500_000,      # the North York detached the $3,800 rent reflects (~3% gross yield)
     "rent_growth_rate": 0.035,         # 3.5%/yr; CMHC Toronto long-term
     "property_tax_rate": 0.007673,     # Toronto 2026 total residential rate 0.7673% -> $7,673 on $1M
     "property_tax_growth_rate": 0.035, # 3.5%/yr long-run
@@ -29,11 +43,12 @@ TORONTO_M2J = {
 # province-wide: tax.land_transfer_tax() charges the Ontario provincial LTT for
 # ltt_region="ontario" and only adds the municipal LTT for "toronto".
 ONTARIO_DEFAULTS = {
-    "home_appreciation_rate": 0.05,    # Ontario long-run ~5%/yr (GTA-weighted; Teranet ON HPI)
+    "home_appreciation_rate": 0.0425,  # Teranet/CREA ON aggregate ~6%+ boom, net of rate normalization. (high conf)
     "maintenance_pct_of_value": 0.01,  # 1% of value/yr
     "current_5yr_fixed_rate": 0.044,   # baseline; overlaid by live BoC rate when --live
     "mortgage_rate_30yr_avg": 0.055,   # Cdn 5yr fixed 30yr avg
     "current_monthly_rent": 2800,      # CAD, Ontario single-family proxy (between national & Toronto)
+    "benchmark_price": 850_000,        # typical Ontario single-family the rent reflects (~4% gross yield)
     "rent_growth_rate": 0.035,         # 3.5%/yr; Ontario has run hot
     "property_tax_rate": 0.011,        # ~1.1% Ontario municipal avg (Toronto low ~0.77%, many cities 1-1.5%)
     "property_tax_growth_rate": 0.03,  # 3%/yr long-run
@@ -50,11 +65,12 @@ ONTARIO_DEFAULTS = {
 # "ontario" (only Toronto levies a municipal land-transfer tax). See SOURCES.
 REGION_TIERS = {
     "ottawa": {
-        "home_appreciation_rate": 0.045,   # Ottawa HPI long-run, stable gov't-employment market
+        "home_appreciation_rate": 0.04,    # Teranet Ottawa-Gatineau ~5% CAGR (2005-24); stable federal-employment base. (high conf)
         "maintenance_pct_of_value": 0.01,
         "current_5yr_fixed_rate": 0.044,
         "mortgage_rate_30yr_avg": 0.055,
         "current_monthly_rent": 2800,      # 3-bed/SFH; Zumper/Rentals.ca 2025-26
+        "benchmark_price": 700_000,        # Ottawa benchmark SFH (~4.8% gross yield)
         "rent_growth_rate": 0.03,
         "property_tax_rate": 0.012271,     # City of Ottawa 2025 total residential 1.227103%
         "property_tax_growth_rate": 0.03,
@@ -62,11 +78,12 @@ REGION_TIERS = {
         "ltt_region": "ontario",
     },
     "hamilton": {
-        "home_appreciation_rate": 0.05,    # GTA-adjacent, strong long-run HPI
+        "home_appreciation_rate": 0.0425,  # Teranet Hamilton ~8% boom CAGR / CREA RAHB ~7%; stretched affordability + correction. (high conf)
         "maintenance_pct_of_value": 0.01,
         "current_5yr_fixed_rate": 0.044,
         "mortgage_rate_30yr_avg": 0.055,
         "current_monthly_rent": 2500,      # 3-bed/SFH; Rentals.ca/Zumper 2025-26
+        "benchmark_price": 800_000,        # Hamilton benchmark SFH (~3.75% gross yield)
         "rent_growth_rate": 0.03,
         "property_tax_rate": 0.014970,     # City of Hamilton 2025 total residential 1.497000%
         "property_tax_growth_rate": 0.03,
@@ -74,11 +91,12 @@ REGION_TIERS = {
         "ltt_region": "ontario",
     },
     "kitchener_waterloo": {
-        "home_appreciation_rate": 0.05,    # KWC tech-corridor, strong long-run HPI
+        "home_appreciation_rate": 0.045,   # CREA KWAR benchmark ~6-7% CAGR; tech base, cheaper than GTA but rate-sensitive. (med conf)
         "maintenance_pct_of_value": 0.01,
         "current_5yr_fixed_rate": 0.044,
         "mortgage_rate_30yr_avg": 0.055,
         "current_monthly_rent": 2450,      # 3-bed/SFH; Zumper 2025-26
+        "benchmark_price": 780_000,        # Kitchener-Waterloo benchmark SFH (~3.77% gross yield)
         "rent_growth_rate": 0.03,
         "property_tax_rate": 0.013567,     # City of Kitchener 2025 total residential 1.356658% (CMA proxy)
         "property_tax_growth_rate": 0.03,
@@ -86,11 +104,12 @@ REGION_TIERS = {
         "ltt_region": "ontario",
     },
     "london": {
-        "home_appreciation_rate": 0.05,    # Strong post-2015 in-migration growth
+        "home_appreciation_rate": 0.0425,  # CREA LSTAR ~7-8% peak CAGR off low base; elastic SW-Ont supply. (med conf)
         "maintenance_pct_of_value": 0.01,
         "current_5yr_fixed_rate": 0.044,
         "mortgage_rate_30yr_avg": 0.055,
         "current_monthly_rent": 2300,      # 3-bed/SFH; Zumper 2025-26
+        "benchmark_price": 650_000,        # London benchmark SFH (~4.25% gross yield)
         "rent_growth_rate": 0.03,
         "property_tax_rate": 0.013889,     # City of London 2025 total residential 1.388893%
         "property_tax_growth_rate": 0.03,
@@ -98,11 +117,12 @@ REGION_TIERS = {
         "ltt_region": "ontario",
     },
     "windsor": {
-        "home_appreciation_rate": 0.05,    # Low base, strong recent catch-up; forward-sustainable
+        "home_appreciation_rate": 0.0375,  # CREA Windsor-Essex ~7% peak off low base; auto/USMCA risk + elastic supply. (med conf)
         "maintenance_pct_of_value": 0.01,
         "current_5yr_fixed_rate": 0.044,
         "mortgage_rate_30yr_avg": 0.055,
         "current_monthly_rent": 2100,      # 3-bed/SFH; Zumper 2025-26 (cheapest CMA here)
+        "benchmark_price": 580_000,        # Windsor benchmark SFH (~4.34% gross yield)
         "rent_growth_rate": 0.03,
         "property_tax_rate": 0.020953,     # City of Windsor 2025 total residential 2.095293% (highest in ON)
         "property_tax_growth_rate": 0.03,
@@ -110,11 +130,12 @@ REGION_TIERS = {
         "ltt_region": "ontario",
     },
     "oshawa": {
-        "home_appreciation_rate": 0.05,    # Durham/GTA commuter belt, strong long-run HPI
+        "home_appreciation_rate": 0.0425,  # CREA/TRREB Durham ~6-7% CAGR; GTA-commuter, rate/commute-sensitive. (med conf)
         "maintenance_pct_of_value": 0.01,
         "current_5yr_fixed_rate": 0.044,
         "mortgage_rate_30yr_avg": 0.055,
         "current_monthly_rent": 2600,      # 3-bed/SFH; Zumper/Apartments.com 2025-26
+        "benchmark_price": 850_000,        # Oshawa/Durham benchmark SFH (~3.67% gross yield)
         "rent_growth_rate": 0.03,
         "property_tax_rate": 0.015245,     # City of Oshawa 2025 total residential 1.524475% (highest in GTA)
         "property_tax_growth_rate": 0.03,
@@ -122,11 +143,12 @@ REGION_TIERS = {
         "ltt_region": "ontario",
     },
     "barrie": {
-        "home_appreciation_rate": 0.05,    # GTA-overflow commuter market, strong long-run HPI
+        "home_appreciation_rate": 0.0425,  # CREA Barrie ~6-7% boom, largest swing; commute/rate-sensitive. (med-low conf)
         "maintenance_pct_of_value": 0.01,
         "current_5yr_fixed_rate": 0.044,
         "mortgage_rate_30yr_avg": 0.055,
         "current_monthly_rent": 2500,      # 3-bed/SFH; Zumper/Zillow 2025-26
+        "benchmark_price": 800_000,        # Barrie benchmark SFH (~3.75% gross yield)
         "rent_growth_rate": 0.03,
         "property_tax_rate": 0.014118,     # City of Barrie 2025 total residential 1.411754%
         "property_tax_growth_rate": 0.03,
@@ -134,11 +156,12 @@ REGION_TIERS = {
         "ltt_region": "ontario",
     },
     "kingston": {
-        "home_appreciation_rate": 0.045,   # Stable institutional (university/hospital) market
+        "home_appreciation_rate": 0.0375,  # CREA Kingston ~5-6% CAGR; small stable institutional economy. (low conf)
         "maintenance_pct_of_value": 0.01,
         "current_5yr_fixed_rate": 0.044,
         "mortgage_rate_30yr_avg": 0.055,
         "current_monthly_rent": 2200,      # 3-bed/SFH; Zumper 2025-26
+        "benchmark_price": 620_000,        # Kingston benchmark SFH (~4.26% gross yield)
         "rent_growth_rate": 0.03,
         "property_tax_rate": 0.015518,     # City of Kingston 2025 total residential 1.551784%
         "property_tax_growth_rate": 0.03,
@@ -146,11 +169,12 @@ REGION_TIERS = {
         "ltt_region": "ontario",
     },
     "guelph": {
-        "home_appreciation_rate": 0.05,    # Tight supply, KW/GTA-adjacent, strong long-run HPI
+        "home_appreciation_rate": 0.045,   # CREA Guelph ~6-7% CAGR; low unemployment + Greenbelt supply constraint. (low-med conf)
         "maintenance_pct_of_value": 0.01,
         "current_5yr_fixed_rate": 0.044,
         "mortgage_rate_30yr_avg": 0.055,
         "current_monthly_rent": 2400,      # 3-bed/SFH; Rentals.ca/RentCafe 2025-26
+        "benchmark_price": 800_000,        # Guelph benchmark SFH (~3.6% gross yield)
         "rent_growth_rate": 0.03,
         "property_tax_rate": 0.013977,     # City of Guelph 2025 total residential 1.397700%
         "property_tax_growth_rate": 0.03,
@@ -158,11 +182,12 @@ REGION_TIERS = {
         "ltt_region": "ontario",
     },
     "st_catharines_niagara": {
-        "home_appreciation_rate": 0.05,    # GTA-overflow + retiree demand, strong long-run HPI
+        "home_appreciation_rate": 0.0425,  # Teranet/CREA Niagara ~7% peak off low base; retiree + GTA/Buffalo spillover. (med conf)
         "maintenance_pct_of_value": 0.01,
         "current_5yr_fixed_rate": 0.044,
         "mortgage_rate_30yr_avg": 0.055,
         "current_monthly_rent": 2400,      # 3-bed/SFH; Zumper/Zolo 2025-26
+        "benchmark_price": 650_000,        # St. Catharines-Niagara benchmark SFH (~4.43% gross yield)
         "rent_growth_rate": 0.03,
         "property_tax_rate": 0.017749,     # City of St. Catharines 2025 total residential 1.774882% (CMA proxy)
         "property_tax_growth_rate": 0.03,
@@ -187,11 +212,12 @@ _CMA_LABELS = {
 
 # Canada-wide fallbacks for any non-Ontario postal code
 NATIONAL_DEFAULTS = {
-    "home_appreciation_rate": 0.045,   # Canada-wide long-term ~4-5%/yr
+    "home_appreciation_rate": 0.0375,  # Teranet Composite-11 ~5.9% (2005-24)/~7.7% peak; blends slower Prairie/Atlantic. (high conf)
     "maintenance_pct_of_value": 0.01,  # 1% of value/yr
     "current_5yr_fixed_rate": 0.044,   # Cdn best-discounted 5yr fixed, mid-2026
     "mortgage_rate_30yr_avg": 0.055,   # Cdn 5yr fixed 30yr avg
     "current_monthly_rent": 2200,      # CAD, national single-family proxy
+    "benchmark_price": 700_000,        # typical Canadian single-family the rent reflects (~3.8% gross yield)
     "rent_growth_rate": 0.03,          # 3%/yr national
     "property_tax_rate": 0.01,         # 1% of value/yr Canada-wide avg (varies 0.3%-2.5% by city)
     "property_tax_growth_rate": 0.03,  # 3%/yr
@@ -241,6 +267,29 @@ def _fsa(postal_code: str) -> str:
     """Return the uppercased 3-char Forward Sortation Area of a postal code."""
     cleaned = (postal_code or "").replace(" ", "").upper()
     return cleaned[:3]
+
+
+def estimate_monthly_rent(params: dict, price: float) -> float:
+    """Estimate the comparable monthly rent for a *specific* home in its region.
+
+    The regional ``current_monthly_rent`` is the rent for that region's typical
+    home (``benchmark_price``). Real homes differ: an expensive home rents for
+    more than the regional average, a cheaper one for less — but NOT in lock-step
+    with price, because gross rental yields fall as price rises. We scale by the
+    price ratio raised to :data:`RENT_PRICE_ELASTICITY` (< 1, so rent grows
+    sub-linearly with price). At ``price == benchmark_price`` the result is
+    exactly ``current_monthly_rent``.
+
+    Falls back to the flat regional rent if the benchmark is missing or the price
+    is non-positive.
+    """
+    base_rent = float(params.get("current_monthly_rent", 0.0))
+    benchmark = float(params.get("benchmark_price", 0.0))
+    if base_rent <= 0 or benchmark <= 0 or price <= 0:
+        return base_rent
+    rent = base_rent * (price / benchmark) ** RENT_PRICE_ELASTICITY
+    # Keep it sane for extreme inputs; the power law already dampens the tails.
+    return round(max(500.0, rent), 2)
 
 
 def get_params(postal_code: str, *, live: bool = False) -> dict:
@@ -300,6 +349,27 @@ SOURCES = {
     "ontario_property_tax": "Municipal residential rate tables (MPAC assessed) ; rates vary by municipality",
     "ontario_cma_property_tax": "Per-city 2025 total residential rates: wowa.ca/taxes/<city>-property-tax + city by-laws (re-verify annually)",
     "ontario_cma_rent": "Blended SFH/3-bed asking rents: rentals.ca, zumper.com/rent-research/<city>-on, CMHC HMIP",
-    "ontario_cma_appreciation": "Forward-sustainable long-run HPI anchored to CREA + Teranet-NBC (not boom CAGRs)",
+    "ontario_cma_appreciation": "Per-region forward-sustainable rate derived from long-run HPI (see appreciation_methodology); anchors + confidence are inline beside each region's home_appreciation_rate.",
+    # --- House-price-index sources behind the per-region appreciation rates ---
+    "teranet_nb_hpi": "Teranet-National Bank House Price Index, composite-11 + extended CMAs, base June 2005=100 -- https://housepriceindex.ca/ (index history & monthly reports)",
+    "crea_mls_hpi": "CREA MLS Home Price Index / benchmark price, by board -- https://www.crea.ca/housing-market-stats/mls-home-price-index/hpi-tool/ ; board series at https://creastats.crea.ca/",
+    "trreb_hpi": "TRREB MLS HPI (Toronto/Durham/Oshawa) -- https://trreb.ca/market-data/mls-home-price-index/",
+    "kwar_hpi": "Kitchener-Waterloo Assoc. of REALTORS HPI dashboard -- https://kwar.ca/hpi-dashboard/",
+    "statcan_nhpi": "Statistics Canada, New Housing Price Index, table 18-10-0205 -- https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1810020501",
+    "teranet_nbc_report": "National Bank of Canada, Teranet-NB HPI monthly economic note -- https://www.nbc.ca/ (economic-news-teranet)",
+    "appreciation_methodology": (
+        "Forward rates were derived from each market's long-run Teranet-NB HPI and CREA MLS HPI "
+        "benchmark history (June-2005=100 base, 2005-2024): take the boom-era CAGR (2005-2022) and the "
+        "full-window CAGR, then apply a downward forward-sustainability haircut for a 20-30yr horizon "
+        "reflecting the affordability ceiling, mortgage-rate normalization, softer immigration/demographics, "
+        "and supply elasticity (larger haircut where land is abundant, smaller where constrained). Rounded "
+        "to the nearest 0.0025, kept within a defensible ~3.75-4.50% band (~1-2% above expected inflation). "
+        "Smaller CMAs (KW, London, Windsor, Oshawa, Barrie, Kingston, Guelph, St. Catharines-Niagara) rely "
+        "on CREA board benchmarks rather than the core Teranet-11 -> lower confidence (flagged inline). "
+        "Verified 2026-06-30; all markets were mid-correction at that time, so these are mid-cycle trend "
+        "assumptions, not near-term forecasts."
+    ),
     "live_mortgage_rate": "Bank of Canada Valet API series BD.CDN.5YR.DQ.YLD (5yr GoC benchmark yield) + lender spread",
+    "rent_from_price": "Rent scaled from each region's benchmark price/rent pair via a sub-linear "
+                       "price-to-rent elasticity (rent ~ price^0.7); gross yields fall as price rises.",
 }

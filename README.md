@@ -91,6 +91,14 @@ appreciation); the rest of **Ontario** (`K/L/N/P`) uses an Ontario-wide default
 tier; everything else falls back to Canada-wide defaults. Add more regions in
 `evaluator/data.py`.
 
+**Rent is estimated from your home's price**, not a flat regional average. Each
+region carries a benchmark price/rent pair; the comparable rent is scaled from it
+by your entered price using a sub-linear price-to-rent relationship
+(rent ≈ price^0.7, `RENT_PRICE_ELASTICITY` in `data.py`). So a pricier-than-typical
+home gets a higher comparable rent and a cheaper one a lower rent, while gross
+rental yields realistically fall as price rises. Override with `--rent` (CLI) or
+the rent what-if slider (web).
+
 The **5-year mortgage rate is live**: with `--live` (CLI) or `EVALUATOR_LIVE_DATA`
 (web; on by default) the tool overlays the current discounted fixed rate derived
 from the **Bank of Canada Valet API** (5-yr Government of Canada benchmark yield +

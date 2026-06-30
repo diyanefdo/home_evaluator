@@ -143,10 +143,17 @@ The point estimate is far less trustworthy than the sensitivity. A small
 appreciation × return grid (e.g. 4/5/6/7% × 7/10%) would make this visible.
 
 ### 7. Smaller modeling simplifications
-- **Rent comparable is uncertain.** $3,800/mo implies a ~4.6% gross yield;
+- ~~**Rent comparable is uncertain.** $3,800/mo implies a ~4.6% gross yield;
   Toronto detached yields run ~3–4%, so true comparable rent may be *lower*,
   which would let the renter invest more early (favors renter). Big lever,
-  thinly sourced (scraper flagged this).
+  thinly sourced (scraper flagged this).~~ **Addressed (2026-06-30):** rent is no
+  longer a flat regional constant — it is scaled from each region's benchmark
+  price/rent pair by the entered home price via a sub-linear price-to-rent
+  elasticity (rent ≈ price^0.7, `data.RENT_PRICE_ELASTICITY`), so gross yields
+  fall with price as observed in-market (Toronto now ~3% at the detached
+  benchmark, higher for cheaper units). Still overridable via `--rent` / slider.
+  Remaining uncertainty: benchmark prices are CMA-level point estimates and the
+  elasticity is a single market-wide constant, not neighbourhood-specific.
 - **No inflation adjustment.** All figures nominal 2056 dollars. Fine for a
   like-for-like comparison, but the absolute numbers look bigger than they feel.
 - **Home insurance held flat** at $1,500/yr (should grow with inflation; minor).
