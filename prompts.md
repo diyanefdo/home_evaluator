@@ -836,3 +836,11 @@ the find button next to "find by address" is not correctly aligned
 ## 2026-07-01 19:21:28
 
 commit and push it
+
+## 2026-07-01 19:26:46
+
+why cant you complete teh Nearby listings in phase 3
+
+## 2026-07-01 19:28:23
+
+what can i work on next then
