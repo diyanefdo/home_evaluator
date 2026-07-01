@@ -895,10 +895,10 @@ FORM = PAGE_HEAD + """
       </div>
       <div class="field">
         <label for="address">Find by address (optional)</label>
-        <div style="display:flex;gap:.4rem">
+        <div style="display:flex;gap:.4rem;align-items:stretch">
           <input id="address" placeholder="e.g. 290 Bremner Blvd, Toronto" style="flex:1;min-width:0">
           <button type="button" onclick="geocodeAddr()"
-            style="flex:none;width:auto;padding:0 .9rem">Find</button>
+            style="flex:none;width:auto;max-width:none;margin-top:0;padding:0 1.1rem;font-size:.95rem;box-shadow:none">Find</button>
         </div>
         <small id="addr_status">Auto-fills the postal code from a street address.</small>
       </div>
