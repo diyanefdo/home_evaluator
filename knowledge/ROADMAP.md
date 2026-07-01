@@ -171,7 +171,7 @@ priority than just researching them once into the Ontario/CMA tiers above.
 
 | Idea | What | Effort | Impact |
 |------|------|--------|--------|
-| **Automated tests + CI** | Unit tests for the engine (amortization, tax, LTT) and a GitHub Actions workflow. The math is the product — it needs a safety net. | M | High |
+| ~~**Automated tests + CI**~~ ✅ **DONE** | 139-test `pytest` suite (province LTT + rebates, CMHC, tax room, routing, rent, amortization, PR exemption) + GitHub Actions on Py 3.11/3.12. `tests/` + `.github/workflows/ci.yml`. | M | High |
 | **Rate limiting** | Protect the public endpoint from abuse (per-IP limits). | S | Medium |
 | **Real secrets management** | Move beyond `.env`; rotate credentials; never log PII. | S | Medium |
 | **Observability** | Structured logging, error tracking (Sentry), basic uptime/health metrics. | S–M | Medium |
@@ -284,7 +284,10 @@ A pragmatic order that front-loads value and respects dependencies:
 - ✅ Live mortgage rates — done (Bank of Canada Valet, Theme 2).
 - ✅ CMHC default insurance for <20% down — done (`tax.cmhc_insurance`; premium
   financed into the loan, PST up front, >$1.5M / below-minimum-down rejected).
-- Automated tests + CI for the engine. *(remaining)*
+- ✅ Automated tests + CI for the engine — done (2026-07-01). A `pytest` suite in
+  `tests/` (139 tests: province LTT + rebates, CMHC, tax room, regional routing,
+  price-derived rent, amortization, principal-residence exemption) runs via
+  GitHub Actions (`.github/workflows/ci.yml`) on Python 3.11/3.12.
 - ✅ Methodology/transparency page (`/methodology`) + clearer site-wide disclaimer.
 
 **Phase 2 — Go stateful (the platform shift)**

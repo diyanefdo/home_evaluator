@@ -206,9 +206,22 @@ past investment returns do not guarantee future results.
 
 ## Development
 
-Each module is independently runnable for testing:
+Each module is independently runnable for a quick manual check:
 
 ```bash
 python3 -m evaluator.charts        # renders synthetic charts to ./_chart_preview
 python3 -m evaluator.projections   # runs the projection smoke test
+```
+
+### Tests & CI
+
+The engine has a `pytest` suite in [`tests/`](tests/) covering the math that is the
+product: land-transfer tax for every province + rebates, CMHC insurance, income-tax
+room, regional routing, price-derived rent, amortization, and the principal-residence
+exemption. **GitHub Actions** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))
+runs it on every push/PR against Python 3.11 and 3.12.
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+pytest
 ```
