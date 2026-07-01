@@ -88,8 +88,20 @@ Hamilton, Kitchener–Waterloo, London, Windsor, Oshawa, Barrie, Kingston, Guelp
 and St. Catharines–Niagara — are routed by FSA prefix to researched local data
 (real 2025 municipal property-tax rates, blended single-family rents, long-run
 appreciation); the rest of **Ontario** (`K/L/N/P`) uses an Ontario-wide default
-tier; everything else falls back to Canada-wide defaults. Add more regions in
-`evaluator/data.py`.
+tier. **All ten provinces are now covered**: postal first-letter routes to a
+province-correct tier (`V`=BC, `T`=AB, `S`=SK, `R`=MB, `G/H/J`=Québec,
+`A/B/C/E`=Atlantic), with **metro overrides** for Vancouver, Calgary, Edmonton,
+Montréal, Winnipeg, and Halifax; only the territories (`X/Y`) fall back to
+Canada-wide defaults. Add more regions in `evaluator/data.py`.
+
+**Land-transfer tax is province-correct.** Each tier carries a `ltt_region` so
+closing costs use the right provincial rules: BC Property Transfer Tax, Manitoba
+LTT, Québec transfer duties (plus Montréal's luxury tiers), Nova Scotia / New
+Brunswick / PEI / Newfoundland deed taxes, and Ontario (+ Toronto municipal),
+while Alberta and Saskatchewan — which levy no LTT — get only their small
+land-title fees. The CMHC-premium PST is likewise province-aware (ON/MB 8%, QC
+9.975%, SK 6%, others none). The non-Ontario appreciation/rent assumptions are
+first-pass researched estimates pending scraper-grounding (see `data.py`).
 
 **Rent is estimated from your home's price**, not a flat regional average. Each
 region carries a benchmark price/rent pair; the comparable rent is scaled from it

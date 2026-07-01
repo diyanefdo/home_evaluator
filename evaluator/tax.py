@@ -25,6 +25,8 @@ side that *is* taxed.
 
 from __future__ import annotations
 
+import math
+
 # Year the tool treats as "now" for room accumulation. Keep in sync with the
 # data module's research vintage.
 CURRENT_YEAR = 2026
@@ -117,7 +119,12 @@ HST_RATE = 0.13                  # Ontario HST, charged ON the commission
 SALE_LEGAL_FEE = 1_500.0         # legal/discharge fees at sale
 PURCHASE_LEGAL_FEE = 2_500.0     # legal + inspection/appraisal at purchase
 
-# Ontario provincial Land Transfer Tax — marginal brackets (lower, rate).
+# Land-transfer / property-transfer tax is PROVINCIAL (a couple of cities add a
+# municipal layer). Each schedule below is a list of (lower_threshold, rate)
+# marginal brackets on the purchase price. Provinces with no LTT (AB, SK) instead
+# charge small flat land-title registration fees, handled separately.
+
+# Ontario provincial Land Transfer Tax.
 _ON_LTT = [
     (0.0, 0.005), (55_000.0, 0.01), (250_000.0, 0.015),
     (400_000.0, 0.02), (2_000_000.0, 0.025),
@@ -128,8 +135,50 @@ _TORONTO_MLTT = [
     (0.0, 0.005), (55_000.0, 0.01), (250_000.0, 0.015),
     (400_000.0, 0.02), (2_000_000.0, 0.025),
 ]
+# British Columbia Property Transfer Tax: 1% first $200k, 2% to $2M, 3% to $3M,
+# +2% (=5%) on the residential portion above $3M.
+_BC_PTT = [(0.0, 0.01), (200_000.0, 0.02), (2_000_000.0, 0.03), (3_000_000.0, 0.05)]
+# Manitoba Land Transfer Tax: nil to $30k, then 0.5 / 1.0 / 1.5 / 2.0%.
+_MB_LTT = [(0.0, 0.0), (30_000.0, 0.005), (90_000.0, 0.01), (150_000.0, 0.015), (200_000.0, 0.02)]
+# Quebec transfer duties ("welcome tax" / droits de mutation) — 2024 base brackets
+# (indexed annually). Municipalities may set higher tiers above $500k (see Montreal).
+_QC_MUTATION = [(0.0, 0.005), (58_900.0, 0.01), (294_600.0, 0.015)]
+# Ville de Montreal's own 2024 schedule adds luxury tiers on top of the base.
+_QC_MONTREAL = [
+    (0.0, 0.005), (58_900.0, 0.01), (294_600.0, 0.015), (552_300.0, 0.02),
+    (1_104_700.0, 0.025), (2_136_500.0, 0.03), (3_113_000.0, 0.035), (4_144_500.0, 0.04),
+]
+# Nova Scotia deed-transfer tax is municipal; Halifax (HRM) is 1.5% (dominant CMA).
+_NS_DEED = [(0.0, 0.015)]
+# New Brunswick real-property transfer tax: 1% of the greater of price/assessment.
+_NB_TRANSFER = [(0.0, 0.01)]
+# PEI real-property transfer tax: 1% (first-time / low-value exemptions ignored).
+_PE_TRANSFER = [(0.0, 0.01)]
+# Newfoundland & Labrador registration of deeds: ~$100 + 0.4% over $500 (approx).
+_NL_REGISTRATION = [(0.0, 0.004)]
+# Saskatchewan has no LTT — only a Land Titles fee of 0.3% of value (>$8,400).
+_SK_TITLE = [(0.0, 0.003)]
+
+# region key -> its marginal LTT schedule. "toronto" and "alberta" are special-cased.
+_LTT_SCHEDULES = {
+    "ontario": _ON_LTT,
+    "bc": _BC_PTT,
+    "manitoba": _MB_LTT,
+    "quebec": _QC_MUTATION,
+    "quebec_montreal": _QC_MONTREAL,
+    "nova_scotia": _NS_DEED,
+    "new_brunswick": _NB_TRANSFER,
+    "pei": _PE_TRANSFER,
+    "newfoundland": _NL_REGISTRATION,
+    "saskatchewan": _SK_TITLE,
+}
+
 ON_FIRST_TIME_REBATE = 4_000.0        # max Ontario first-time-buyer LTT rebate
 TORONTO_FIRST_TIME_REBATE = 4_475.0   # max Toronto first-time-buyer MLTT rebate
+# BC first-time-buyer exemption: full below $835k FMV (exemption = tax on the
+# first $500k), phasing out to $860k. Modelled as full-below-threshold.
+BC_FTB_FULL_THRESHOLD = 835_000.0
+BC_FTB_EXEMPT_PORTION = 500_000.0
 
 
 def _bracketed_tax(price: float, brackets: list) -> float:
@@ -154,18 +203,46 @@ def toronto_mltt(price: float) -> float:
     return _bracketed_tax(float(price), _TORONTO_MLTT)
 
 
-def land_transfer_tax(price: float, region: str = "ontario", first_time: bool = False) -> float:
-    """Total land-transfer tax. ``region='toronto'`` adds the municipal LTT.
+def _alberta_title_fee(price: float) -> float:
+    """Alberta has no LTT — only a Land Titles registration fee.
 
-    For non-Ontario postal codes the provincial Ontario LTT is used as a rough
-    national proxy (provinces vary widely — AB/SK have none, BC/QC differ).
+    The property-transfer registration fee is $50 + $5 per $5,000 of value
+    (rounded up). The separate mortgage-registration fee (a similar charge on the
+    loan) is not modelled here, so this is a slight under-estimate for financed
+    purchases — but it is dollars, not the ~1-2% a real LTT would cost.
     """
-    total = ontario_ltt(price)
-    rebate = ON_FIRST_TIME_REBATE if first_time else 0.0
-    if region == "toronto":
-        total += toronto_mltt(price)
-        if first_time:
+    return 50.0 + 5.0 * math.ceil(float(price) / 5_000.0)
+
+
+def _first_time_rebate(price: float, region: str) -> float:
+    """First-time-buyer land-transfer rebate/exemption for a region (0 if none)."""
+    if region in ("ontario", "toronto"):
+        rebate = ON_FIRST_TIME_REBATE
+        if region == "toronto":
             rebate += TORONTO_FIRST_TIME_REBATE
+        return rebate
+    if region == "bc" and price <= BC_FTB_FULL_THRESHOLD:
+        # Exemption equals the PTT payable on the first $500k of value.
+        return _bracketed_tax(min(price, BC_FTB_EXEMPT_PORTION), _BC_PTT)
+    return 0.0
+
+
+def land_transfer_tax(price: float, region: str = "ontario", first_time: bool = False) -> float:
+    """Total land-transfer / property-transfer tax for a region.
+
+    ``region`` is a province/municipality key (see ``_LTT_SCHEDULES``):
+    ``"toronto"`` = Ontario provincial + Toronto municipal LTT; ``"alberta"`` /
+    ``"saskatchewan"`` have no LTT (nominal title fees); ``"quebec_montreal"`` adds
+    Montreal's luxury tiers. Unknown regions fall back to the Ontario schedule.
+    """
+    price = float(price)
+    if region == "alberta":
+        return _alberta_title_fee(price)   # no LTT; no FTB rebate
+    if region == "toronto":
+        total = ontario_ltt(price) + toronto_mltt(price)
+    else:
+        total = _bracketed_tax(price, _LTT_SCHEDULES.get(region, _ON_LTT))
+    rebate = _first_time_rebate(price, region) if first_time else 0.0
     return max(0.0, total - rebate)
 
 
@@ -195,9 +272,13 @@ _CMHC_PREMIUM_RATES = [
     (0.65, 0.0060), (0.75, 0.0170), (0.80, 0.0240),
     (0.85, 0.0280), (0.90, 0.0310), (0.95, 0.0400),
 ]
-# Provincial sales tax charged on the premium (paid up front, not financed).
-# Only Ontario (incl. Toronto) is modelled here; ON/MB are 8%, QC 9.975%, SK 6%.
-_CMHC_PST_ON_PREMIUM = {"ontario": 0.08, "toronto": 0.08}
+# Provincial sales tax charged on the CMHC premium (paid up front, not financed).
+# Only ON, MB, QC, and SK levy it: ON/MB 8%, QC 9.975%, SK 6%. BC, AB, and the
+# HST/no-PST provinces charge nothing on the premium (default 0).
+_CMHC_PST_ON_PREMIUM = {
+    "ontario": 0.08, "toronto": 0.08, "manitoba": 0.08,
+    "quebec": 0.09975, "quebec_montreal": 0.09975, "saskatchewan": 0.06,
+}
 
 
 def cmhc_min_down_payment(price: float) -> float:
@@ -269,4 +350,10 @@ SOURCES = {
     "rrsp_limits": "https://www.canada.ca/en/revenue-agency/services/tax/registered-plans-administrators/pspa/mp-rrsp-dpsp-tfsa-limits-ympe.html",
     "capital_gains": "https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/personal-income/line-12700-capital-gains.html",
     "cmhc_premiums": "https://www.cmhc-schl.gc.ca/professionals/project-funding-and-mortgage-financing/mortgage-loan-insurance/mortgage-loan-insurance-homeownership-programs/cmhc-mortgage-loan-insurance-cost",
+    "ltt_ontario": "https://www.ontario.ca/document/land-transfer-tax ; Toronto MLTT https://www.toronto.ca/services-payments/property-taxes-utilities/municipal-land-transfer-tax-mltt/",
+    "ltt_bc": "BC Property Transfer Tax https://www2.gov.bc.ca/gov/content/taxes/property-taxes/property-transfer-tax (1/2/3/5% bands; FTB exemption <$835k)",
+    "ltt_quebec": "Quebec transfer duties ('welcome tax') https://www.revenuquebec.ca/ ; Ville de Montreal droits de mutation by-law (luxury tiers, indexed 2024)",
+    "ltt_manitoba": "Manitoba Land Transfer Tax https://www.gov.mb.ca/finance/taxation/taxes/land.html (nil<$30k, 0.5/1.0/1.5/2.0%)",
+    "ltt_atlantic": "NS deed transfer (HRM 1.5%), NB 1%, PEI 1%, NL registration ~0.4% — municipal/provincial rate tables",
+    "ltt_no_ltt": "Alberta (land-title registration fee $50 + $5/$5,000) and Saskatchewan (0.3% title fee) levy no land-transfer tax",
 }

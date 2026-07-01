@@ -210,7 +210,10 @@ _CMA_LABELS = {
     "st_catharines_niagara": "St. Catharines-Niagara (Ontario CMA)",
 }
 
-# Canada-wide fallbacks for any non-Ontario postal code
+# Canada-wide fallbacks. With province routing (below) covering all ten provinces,
+# this now only catches the territories (postal X/Y). ltt_region uses the low
+# Saskatchewan title-fee (0.3%) as a proxy for the territories' small registration
+# fees — far closer than Ontario's ~1.5% LTT.
 NATIONAL_DEFAULTS = {
     "home_appreciation_rate": 0.0375,  # Teranet Composite-11 ~5.9% (2005-24)/~7.7% peak; blends slower Prairie/Atlantic. (high conf)
     "maintenance_pct_of_value": 0.01,  # 1% of value/yr
@@ -222,8 +225,145 @@ NATIONAL_DEFAULTS = {
     "property_tax_rate": 0.01,         # 1% of value/yr Canada-wide avg (varies 0.3%-2.5% by city)
     "property_tax_growth_rate": 0.03,  # 3%/yr
     "sp500_nominal_cagr": 0.10,        # 10% nominal w/ dividends
-    "ltt_region": "ontario",           # land-transfer tax: Ontario provincial used as a national proxy
+    "ltt_region": "saskatchewan",      # territories proxy: small registration fees, not a full LTT
 }
+
+
+# --------------------------------------------------------------------------- #
+# Non-Ontario provinces & metros (Phase 3 — more regions + province-correct LTT).
+# --------------------------------------------------------------------------- #
+# These tiers were added to fix the biggest correctness gap for non-Ontario users:
+# land-transfer tax and property district were previously an Ontario proxy. The
+# LTT (ltt_region) and property-tax rates below are the headline fix; the
+# appreciation / rent / benchmark_price macro figures are FIRST-PASS researched
+# estimates (2025-26, med/low confidence) pending the same scraper-grounding the
+# Ontario CMAs received — flagged inline. See SOURCES.
+def _tier(**overrides) -> dict:
+    """Build a region tier from NATIONAL_DEFAULTS, overriding only what differs.
+
+    Keeps the shared, non-geographic constants (mortgage rate, S&P CAGR,
+    maintenance, growth rates) in one place. The Ontario tiers above predate this
+    helper and stay explicit; ltt_region is always set explicitly here.
+    """
+    return {**NATIONAL_DEFAULTS, **overrides}
+
+
+# --- British Columbia (postal V) — BC Property Transfer Tax ------------------ #
+VANCOUVER = _tier(
+    home_appreciation_rate=0.045,  # constrained land + demand vs extreme affordability ceiling. (med conf, first-pass)
+    current_monthly_rent=4600,     # Greater Vancouver detached blended asking, 2025-26
+    benchmark_price=1_900_000,     # Greater Vancouver detached benchmark (~2.9% gross yield)
+    property_tax_rate=0.00278,     # City of Vancouver ~0.278% (lowest in Canada; re-verify)
+    ltt_region="bc",
+)
+BC_DEFAULTS = _tier(
+    home_appreciation_rate=0.0425,  # BC ex-Vancouver long-run, land-constrained. (low-med conf, first-pass)
+    current_monthly_rent=3200,
+    benchmark_price=950_000,
+    property_tax_rate=0.004,        # BC municipal avg ~0.4% (Victoria/Surrey/interior blend; re-verify)
+    ltt_region="bc",
+)
+
+# --- Alberta (postal T) — no LTT, only land-title registration fees ---------- #
+CALGARY = _tier(
+    home_appreciation_rate=0.0375,  # elastic supply, oil-cyclical, strong 2022-24. (med conf, first-pass)
+    current_monthly_rent=2400,
+    benchmark_price=650_000,
+    property_tax_rate=0.0066,       # City of Calgary 2024 residential ~0.66% (re-verify)
+    ltt_region="alberta",
+)
+EDMONTON = _tier(
+    home_appreciation_rate=0.03,    # very elastic supply, flat long-run real prices. (med conf, first-pass)
+    current_monthly_rent=1950,
+    benchmark_price=450_000,
+    property_tax_rate=0.0096,       # City of Edmonton 2024 residential ~0.96% (re-verify)
+    ltt_region="alberta",
+)
+ALBERTA_DEFAULTS = _tier(
+    home_appreciation_rate=0.0325,
+    current_monthly_rent=2100,
+    benchmark_price=500_000,
+    property_tax_rate=0.0085,       # AB municipal avg (Red Deer/Lethbridge/north blend; re-verify)
+    ltt_region="alberta",
+)
+
+# --- Quebec (postal G/H/J) — transfer duties ("welcome tax") ----------------- #
+MONTREAL = _tier(
+    home_appreciation_rate=0.04,    # strong post-2020 off an affordable base. (med conf, first-pass)
+    current_monthly_rent=2200,
+    benchmark_price=650_000,
+    property_tax_rate=0.0075,       # Ville de Montreal effective ~0.75% incl. services (re-verify)
+    ltt_region="quebec_montreal",   # Montreal levies its own luxury-tier welcome tax
+)
+QUEBEC_DEFAULTS = _tier(
+    home_appreciation_rate=0.035,   # Quebec ex-Montreal (Quebec City, regions). (low-med conf, first-pass)
+    current_monthly_rent=1850,
+    benchmark_price=450_000,
+    property_tax_rate=0.0085,       # QC municipal avg (Quebec City ~0.87%; re-verify)
+    ltt_region="quebec",
+)
+
+# --- Manitoba (postal R) — Manitoba Land Transfer Tax ------------------------ #
+WINNIPEG = _tier(
+    home_appreciation_rate=0.035,   # steady, affordable prairie market. (med conf, first-pass)
+    current_monthly_rent=1900,
+    benchmark_price=400_000,
+    property_tax_rate=0.0125,       # City of Winnipeg municipal+education ~1.25% (re-verify)
+    ltt_region="manitoba",
+)
+MANITOBA_DEFAULTS = _tier(
+    home_appreciation_rate=0.0325,
+    current_monthly_rent=1850,
+    benchmark_price=380_000,
+    property_tax_rate=0.013,
+    ltt_region="manitoba",
+)
+
+# --- Saskatchewan (postal S) — no LTT, 0.3% land-title fee ------------------- #
+SASKATCHEWAN_DEFAULTS = _tier(
+    home_appreciation_rate=0.03,    # flat, resource-linked (Saskatoon/Regina). (low-med conf, first-pass)
+    current_monthly_rent=1750,
+    benchmark_price=380_000,
+    property_tax_rate=0.011,        # Saskatoon ~1.03% / Regina ~1.16% blend (re-verify)
+    ltt_region="saskatchewan",
+)
+
+# --- Atlantic (postal A/B/C/E) — per-province deed/transfer taxes ------------ #
+HALIFAX = _tier(
+    home_appreciation_rate=0.04,    # hot post-2020 in-migration. (med conf, first-pass)
+    current_monthly_rent=2500,
+    benchmark_price=550_000,
+    property_tax_rate=0.0115,       # HRM residential ~1.15% incl. area rates (re-verify)
+    ltt_region="nova_scotia",       # HRM deed transfer 1.5%
+)
+NOVA_SCOTIA_DEFAULTS = _tier(
+    home_appreciation_rate=0.04,
+    current_monthly_rent=2100,
+    benchmark_price=480_000,
+    property_tax_rate=0.0115,
+    ltt_region="nova_scotia",
+)
+NEW_BRUNSWICK_DEFAULTS = _tier(
+    home_appreciation_rate=0.035,
+    current_monthly_rent=1750,
+    benchmark_price=350_000,
+    property_tax_rate=0.015,        # NB provincial+municipal residential ~1.5% (re-verify)
+    ltt_region="new_brunswick",
+)
+PEI_DEFAULTS = _tier(
+    home_appreciation_rate=0.04,
+    current_monthly_rent=1900,
+    benchmark_price=420_000,
+    property_tax_rate=0.015,
+    ltt_region="pei",
+)
+NEWFOUNDLAND_DEFAULTS = _tier(
+    home_appreciation_rate=0.025,   # flat/declining outside St. John's. (low conf, first-pass)
+    current_monthly_rent=1600,
+    benchmark_price=350_000,
+    property_tax_rate=0.0083,       # St. John's ~0.83% (re-verify)
+    ltt_region="newfoundland",
+)
 
 # First 3 chars of a Canadian postal code = Forward Sortation Area (FSA).
 # Map known FSAs to their region param set. Extend as more areas are scraped.
@@ -260,6 +400,41 @@ _FSA2_TO_CMA = {
     "N2": "kitchener_waterloo", "N3": "kitchener_waterloo",  # N3 = Cambridge (Brantford partial)
     "N5": "london", "N6": "london",
     "N8": "windsor", "N9": "windsor",
+}
+
+
+# --- Non-Ontario routing (Phase 3) ------------------------------------------ #
+# Metros routed by 2-char FSA prefix (checked before the province-letter default).
+_FSA2_TO_METRO = {
+    "V5": "vancouver", "V6": "vancouver", "V7": "vancouver", "V3": "vancouver", "V4": "vancouver",
+    "T2": "calgary", "T3": "calgary",
+    "T5": "edmonton", "T6": "edmonton",
+    "R2": "winnipeg", "R3": "winnipeg",
+    "B3": "halifax",
+}
+_METRO_TIERS = {
+    "vancouver": VANCOUVER, "calgary": CALGARY, "edmonton": EDMONTON,
+    "winnipeg": WINNIPEG, "halifax": HALIFAX,
+}  # Montreal (all of postal district H) is routed by letter below
+_METRO_LABELS = {
+    "vancouver": "Vancouver (BC metro)", "calgary": "Calgary (Alberta metro)",
+    "edmonton": "Edmonton (Alberta metro)", "winnipeg": "Winnipeg (Manitoba metro)",
+    "halifax": "Halifax (Nova Scotia metro)", "montreal": "Montreal (Quebec metro)",
+}
+# Postal first-letter -> provincial default tier + label. Ontario (K/L/M/N/P) and
+# Quebec's Montreal island (H) are handled separately in get_params; X/Y
+# (territories) fall through to NATIONAL_DEFAULTS.
+_DISTRICT_TO_PROVINCE = {
+    "V": (BC_DEFAULTS, "British Columbia (provincial default)"),
+    "T": (ALBERTA_DEFAULTS, "Alberta (provincial default)"),
+    "S": (SASKATCHEWAN_DEFAULTS, "Saskatchewan (provincial default)"),
+    "R": (MANITOBA_DEFAULTS, "Manitoba (provincial default)"),
+    "G": (QUEBEC_DEFAULTS, "Quebec (provincial default)"),
+    "J": (QUEBEC_DEFAULTS, "Quebec (provincial default)"),
+    "B": (NOVA_SCOTIA_DEFAULTS, "Nova Scotia (provincial default)"),
+    "E": (NEW_BRUNSWICK_DEFAULTS, "New Brunswick (provincial default)"),
+    "C": (PEI_DEFAULTS, "Prince Edward Island (provincial default)"),
+    "A": (NEWFOUNDLAND_DEFAULTS, "Newfoundland & Labrador (provincial default)"),
 }
 
 
@@ -302,7 +477,13 @@ def get_params(postal_code: str, *, live: bool = False) -> dict:
       3. a 3-char FSA override -> its Ontario CMA tier (L4M/L4N, N1R/S/T);
       4. a 2-char FSA prefix -> its Ontario CMA tier (Ottawa, Hamilton, ...);
       5. any other Ontario district (K/L/N/P) -> ONTARIO_DEFAULTS;
-      6. everything else -> NATIONAL_DEFAULTS.
+      6. a non-Ontario metro FSA (V5-7 Vancouver, T2/3 Calgary, ...) -> its metro tier;
+      7. Quebec's Montreal island (H) -> MONTREAL (Montreal welcome-tax tiers);
+      8. any other province letter (A/B/C/E/G/J/R/S/T/V) -> its provincial default;
+      9. everything else (territories X/Y) -> NATIONAL_DEFAULTS.
+
+    Each tier carries a province-correct ``ltt_region`` so land-transfer tax and
+    the CMHC-premium PST are computed with the right provincial rules.
 
     With ``live=True`` the volatile 5-year mortgage rate is overlaid from the
     Bank of Canada (see ``evaluator.live``); if that fetch fails the baked-in
@@ -322,8 +503,15 @@ def get_params(postal_code: str, *, live: bool = False) -> dict:
         params, label = REGION_TIERS[key], _CMA_LABELS[key]
     elif fsa[:1] in _ONTARIO_DISTRICTS:
         params, label = ONTARIO_DEFAULTS, "Ontario (provincial default)"
+    elif fsa[:2] in _FSA2_TO_METRO:
+        key = _FSA2_TO_METRO[fsa[:2]]
+        params, label = _METRO_TIERS[key], _METRO_LABELS[key]
+    elif fsa[:1] == "H":
+        params, label = MONTREAL, _METRO_LABELS["montreal"]
+    elif fsa[:1] in _DISTRICT_TO_PROVINCE:
+        params, label = _DISTRICT_TO_PROVINCE[fsa[:1]]
     else:
-        params, label = NATIONAL_DEFAULTS, "Canada (national default)"
+        params, label = NATIONAL_DEFAULTS, "Canada / Territories (national default)"
 
     result = dict(params)
     result["_region"] = label
@@ -382,4 +570,21 @@ SOURCES = {
     "live_mortgage_rate": "Bank of Canada Valet API series BD.CDN.5YR.DQ.YLD (5yr GoC benchmark yield) + lender spread",
     "rent_from_price": "Rent scaled from each region's benchmark price/rent pair via a sub-linear "
                        "price-to-rent elasticity (rent ~ price^0.7); gross yields fall as price rises.",
+    "province_coverage": (
+        "Phase 3 (2026-07-01): all ten provinces now route to a province-correct tier by postal "
+        "first-letter (V=BC, T=AB, S=SK, R=MB, G/H/J=QC, A/B/C/E=Atlantic; K/L/M/N/P=ON), with metro "
+        "overrides for Vancouver, Calgary, Edmonton, Montreal, Winnipeg, and Halifax. Each tier carries "
+        "a province-correct ltt_region so land-transfer tax (BC PTT, MB LTT, QC/Montreal welcome tax, "
+        "AB/SK title fees, NS/NB/PE/NL deed taxes) and the CMHC-premium PST are computed with the right "
+        "provincial rules -- the headline correctness fix. NOTE: the appreciation / rent / benchmark_price "
+        "macro figures for the non-Ontario tiers are FIRST-PASS researched estimates (med/low confidence, "
+        "flagged inline) pending the same Teranet/CREA/CMHC scraper-grounding the Ontario CMAs received; "
+        "property-tax rates are city figures to re-verify against current by-laws."
+    ),
+    "province_ltt": (
+        "Land-transfer/property-transfer tax rules per province (see evaluator/tax.py SOURCES): "
+        "BC Property Transfer Tax; Manitoba LTT; Quebec transfer duties + Ville de Montreal luxury tiers; "
+        "Nova Scotia (Halifax 1.5%), New Brunswick 1%, PEI 1%, Newfoundland ~0.4%; Alberta & Saskatchewan "
+        "levy no LTT (nominal land-title registration fees)."
+    ),
 }

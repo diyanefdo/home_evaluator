@@ -295,9 +295,19 @@ A pragmatic order that front-loads value and respects dependencies:
 
 **Phase 3 — Live market data (the wow factor)**
 - Improve assumptions from free aggregate sources (CMHC rents, Teranet/StatCan
-  trends, municipal tax tables) + more regions.
-- Address autofill + comparable rentals.
-- Nearby listings (only with a properly-sourced/legal data feed).
+  trends, municipal tax tables) + more regions. **🔨 In progress (2026-07-01):**
+  **all ten provinces now route to a province-correct tier** with **province-correct
+  land-transfer tax** (BC PTT, MB LTT, QC/Montréal welcome tax, AB/SK title fees,
+  NS/NB/PE/NL deed taxes) + province-aware CMHC-premium PST, and metro tiers for
+  Vancouver/Calgary/Edmonton/Montréal/Winnipeg/Halifax (`evaluator/tax.py` +
+  `data.py`). The LTT/property-tax correctness is done and tested; the
+  non-Ontario appreciation/rent **macro** figures are first-pass estimates still
+  awaiting the scraper-grounding the Ontario CMAs got. *(remaining: scraper pass
+  for the new regions; CMHC-HMIP rent grounding.)*
+- Address autofill + comparable rentals. *(remaining — autofill is unblocked via a
+  free geocoder; comparable rentals need a data feed.)*
+- Nearby listings (only with a properly-sourced/legal data feed). *(blocked — no
+  free/legal MLS feed; needs paid/licensed access.)*
 
 **Phase 4 — Polish & engagement**
 - ✅ Interactive charts (Plotly) + what-if sliders — done.
