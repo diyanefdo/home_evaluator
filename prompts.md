@@ -824,3 +824,15 @@ Format: appreciation / rent (CAD) / benchmark_price (CAD) / property_tax_rate | 
 - Memory updated: `/home/diyanefdo/home_evaluator/.claude/agent-memory/canada-housing-financial-scraper/reference_non_ontario_tax_benchmarks.md` (indexed in MEMORY.md) now holds these verified rates/benchmarks for future runs.</result>
 <usage><subagent_tokens>69944</subagent_tokens><tool_uses>35</tool_uses><duration_ms>274575</duration_ms></usage>
 </task-notification>
+
+## 2026-07-01 19:15:03
+
+ok
+
+## 2026-07-01 19:20:20
+
+the find button next to "find by address" is not correctly aligned
+
+## 2026-07-01 19:21:28
+
+commit and push it
