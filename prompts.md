@@ -769,3 +769,58 @@ next can you start tackling phase 3. it has 3 bullet points
 ## 2026-07-01 19:05:26
 
 yes do all of that
+
+## 2026-07-01 19:11:00
+
+<task-notification>
+<task-id>a36574c2bb627ecd1</task-id>
+<tool-use-id>toolu_018XdN4euaUmdNbRiZfQsfvV</tool-use-id>
+<output-file>/tmp/claude-1000/-home-diyanefdo-home-evaluator/53d0c3ab-5873-4763-b0bd-1985e87e54b3/tasks/a36574c2bb627ecd1.output</output-file>
+<status>completed</status>
+<summary>Agent "Ground non-Ontario region assumptions" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Findings below. I did not edit any files. Property tax rates are the highest-confidence (WOWA per-city 2025 final rates); benchmark prices are current 2025-26 board/CREA figures; appreciation rates are methodology-derived (boom-CAGR haircut) since exact Teranet per-city index levels remain non-extractable via fetch.
+
+## Grounded values by region
+
+Format: appreciation / rent (CAD) / benchmark_price (CAD) / property_tax_rate | confidence
+
+| Region | Appreciation | Rent | Benchmark | Prop-tax | Conf | Source note |
+|---|---|---|---|---|---|---|
+| **Vancouver** (Greater Van) | **0.045** | 4600 | **1,975,000** | **0.0031154** | med | REBGV detached benchmark $1,994,500 (Jun-25); WOWA Van 2025 tax 0.311540% (placeholder 0.00278 was too low). Supply-constrained → small haircut; yield ~2.8% |
+| **BC default** (Victoria/Surrey/interior) | **0.0425** | 3100 | 950,000 | **0.0045** | low-med | Victoria core benchmark ~$1.34M / avg $1.175M, interior (Kelowna/Kamloops) $650-900k → blend ~$950k; tax blend Victoria 0.520% + Surrey 0.311% + interior ~0.45% ≈ 0.45% |
+| **Calgary** | **0.0375** | 2450 | **700,000** | **0.006180** | med | Detached benchmark ~$720-760k (avg $666k May-26); WOWA Calgary 2025 tax 0.618030% (placeholder 0.0066 too high). Oil-cyclical, elastic supply → bigger haircut |
+| **Edmonton** | **0.03** | 2000 | **510,000** | **0.010139** | med | CREA SFD benchmark $531,200 (May-26); WOWA Edmonton 2025 tax 1.013910%. Very elastic supply, flat real prices → largest haircut |
+| **Alberta default** (Red Deer/Lethbridge/north) | **0.0325** | 2000 | 490,000 | **0.0105** | low-med | Red Deer/Lethbridge/Grande Prairie detached ~$400-480k; AB small-city tax HIGHER than Calgary (Red Deer ~1.07%, Lethbridge ~1.2%) → ~1.05% |
+| **Montreal** | **0.04** | 2300 | 650,000 | **0.0075** | med | Greater Montreal SFH median $645k (May-26); WOWA base 0.661030%, effective incl. borough/water/services ~0.75%. Affordable base, strong post-2020 |
+| **Quebec default** (Quebec City/regions) | **0.035** | 1900 | **475,000** | **0.0087** | low-med | Quebec City SFD median $478,400 (Q4-25); city rate ~0.87-0.95% (WOWA quebeccity slug; quebec-city 404s) |
+| **Winnipeg** | **0.035** | 1950 | 410,000 | **0.0124** | med | Avg $427k (May-26); headline 2.755% is on 45% portioned assessment → effective on market 2.755%×0.45 = **1.24%** (placeholder 0.0125 essentially correct). Steady, high-yield |
+| **Manitoba default** (Brandon/rural) | **0.0325** | 1800 | 370,000 | **0.013** | low | Brandon avg ~$320-360k; tax ~1.3-1.4% effective. Thin data |
+| **Saskatchewan default** (Saskatoon/Regina) | **0.03** | 1800 | 400,000 | **0.011** | med | Saskatoon benchmark $435k / Regina $344k (2026 records) → blend ~$400k; Saskatoon 1.251%×80%=1.00%, Regina 1.487%×80%=1.19% → ~1.1%. Resource-linked, flat long-run |
+| **Halifax** | **0.04** | 2600 | **600,000** | **0.012** | med | Avg $629k (May-26); WOWA HRM general 1.197%, urban incl. area rates ~1.2%. Strong in-migration post-2020 |
+| **Nova Scotia default** (ex-Halifax) | **0.0375** | 2000 | 430,000 | **0.0115** | low-med | Cape Breton/Truro detached ~$350-420k; NS rural surged on remote-work migration but structurally slower than HRM → slight haircut vs Halifax |
+| **New Brunswick default** (Moncton/Fred/Saint John) | **0.035** | 1850 | 380,000 | **0.0165** | med | Moncton SFD median $421k / Fredericton ~$350k / Saint John ~$330k → ~$380k; tax Moncton 1.923% + Fredericton ~1.4% + Saint John ~1.8% → ~1.65% (placeholder 0.015 low). Big post-2020 boom off low base |
+| **PEI default** (Charlottetown) | **0.04** | 1900 | 430,000 | **0.015** | low | Charlottetown avg $419k; headline 1.67% (muni 0.67 + prov 1.00) is NON-owner-occupied — owner-occupied residents get provincial credit → effective ~1.1-1.3%; kept 1.5% conservative. Small/volatile market |
+| **Newfoundland default** (St. John's) | **0.0275** | 1750 | 400,000 | **0.0091** | low | St. John's avg $410-424k (up 11% YoY 2025 — placeholder $350k/1600 stale); tax 9.1 mills = 0.91% + fixed water. Nudged appreciation 0.025→0.0275 on recent strength, but oil-dependence caps it |
+
+### Changes vs your placeholders (the ones that matter)
+- **Property tax**: Vancouver 0.00278 → **0.00312**; Calgary 0.0066 → **0.00618**; Edmonton 0.0096 → **0.01014**; Alberta default 0.0085 → **0.0105**; NB default 0.015 → **0.0165**; NL 0.0083 → **0.0091**. Winnipeg (0.0124), SK (0.011), Halifax (~0.012), PEI (0.015) were essentially right.
+- **Benchmark/rent staleness**: Edmonton (450k→510k), Calgary (650k→700k), Halifax (550k→600k), Quebec City (450k→475k), and especially **Newfoundland** (350k/1600 → 400k/1750, market rose 11% in 2025) were low.
+- **Appreciation**: all within your intended band; only material nudge is NL 0.025 → **0.0275**. The rest I confirm as-is.
+
+### Confidence honesty
+- **High/med (trust)**: all property-tax rates (WOWA 2025 finals), and Vancouver/Calgary/Edmonton/Winnipeg/Montreal/Halifax/Saskatoon-Regina benchmarks (board/CREA sourced).
+- **Low (treat as best-available)**: Manitoba default, Nova Scotia default (ex-Halifax), PEI, Newfoundland — small provinces where I anchored to provincial averages / a single city rather than a clean CMA series. Appreciation rates everywhere are haircut estimates, not raw index reads (housepriceindex.ca index history remains blocked to fetch — same limitation logged for the Ontario work).
+
+## Citable sources (for SOURCES)
+- **Property tax (WOWA, 2025 finals)**: `wowa.ca/taxes/{vancouver|surrey|victoria|calgary|edmonton|winnipeg|saskatoon|regina|montreal|quebeccity|halifax|moncton|charlottetown|stjohns}-property-tax`
+- **Teranet–National Bank HPI**: housepriceindex.ca (interactive; index history not fetch-extractable) + NBC monthly PDF `nbc.ca/content/dam/bnc/taux-analyses/analyse-eco/logement/economic-news-teranet.pdf`
+- **CREA MLS HPI + board benchmarks**: `crea.ca/housing-market-stats/mls-home-price-index/`; boards: REBGV `gvrealtors.ca/market-watch`, Saskatchewan `stats.crea.ca/board/sra/`, NL `creastats.crea.ca/board/stjo/`, NB `creastats.crea.ca/board/nbreb/`
+- **Prices/rents**: Royal LePage quarterly market reports (Montreal/Quebec City/Moncton Q4-2025); WOWA city housing-market pages; CMHC HMIP `www03.cmhc-schl.gc.ca/hmip-pimh`; Rentals.ca/Zumper for current asking rents
+
+## Notes for applying in data.py
+- **Winnipeg/Saskatoon/Regina**: the raw WOWA rate is on *portioned/percentage-of-value* assessment, not market value. The decimals I give are already converted to effective-on-market (Winnipeg ×0.45, SK ×0.80) — use those directly since `data.py` applies the rate to entered price.
+- **PEI**: the 1.5% you have is the conservative (headline-ish) figure; a true owner-occupied principal residence is closer to 1.1-1.3%. Flag as a modelling choice.
+- Memory updated: `/home/diyanefdo/home_evaluator/.claude/agent-memory/canada-housing-financial-scraper/reference_non_ontario_tax_benchmarks.md` (indexed in MEMORY.md) now holds these verified rates/benchmarks for future runs.</result>
+<usage><subagent_tokens>69944</subagent_tokens><tool_uses>35</tool_uses><duration_ms>274575</duration_ms></usage>
+</task-notification>
