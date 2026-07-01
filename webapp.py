@@ -1281,9 +1281,9 @@ def _methodology_html() -> str:
         + '(with metro tiers for Vancouver, Calgary, Edmonton, Montr&eacute;al, Winnipeg, and '
         + 'Halifax); the territories use a national fallback. The <b>5-year mortgage rate is live</b> '
         + 'from the Bank of Canada (cached, with an offline fallback). Anything regional can be '
-        + 'overridden on the form. <em>Note: outside Ontario the land-transfer/property-tax rules '
-        + 'are exact, but the appreciation and rent figures are first-pass estimates still being '
-        + 'ground in Teranet/CREA/CMHC data.</em></p>'
+        + 'overridden on the form. <em>Note: outside Ontario the land-transfer/property-tax rules and '
+        + 'rates, benchmark prices, and rents are data-grounded (WOWA 2025 / CREA / CMHC); only the '
+        + 'long-run appreciation is a forward-sustainable estimate.</em></p>'
         + _sources_html()
 
         + '<h2>Key assumptions</h2>'
@@ -1303,8 +1303,8 @@ def _methodology_html() -> str:
         + '<li>Volatility and sequence-of-returns risk (a single average return is used; the '
         + 'sensitivity heatmap shows how the verdict shifts across assumptions).</li>'
         + '<li>Lifestyle factors, mobility, maintenance effort, and non-financial value.</li>'
-        + '<li>Scraper-grounded appreciation/rent for the non-Ontario provinces (first-pass '
-        + 'estimates today; the land-transfer and property-tax rules there are exact).</li>'
+        + '<li>Per-city Teranet index reads for the non-Ontario provinces (appreciation there is a '
+        + 'forward-sustainable estimate; the LTT, property-tax, benchmark, and rent figures are grounded).</li>'
         + '</ul>'
         + '<p>See <code>knowledge/METHODOLOGY_GAPS.md</code> in the repository for the detailed '
         + 'list of modelling gaps and decisions.</p>'

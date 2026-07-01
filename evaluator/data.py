@@ -232,12 +232,15 @@ NATIONAL_DEFAULTS = {
 # --------------------------------------------------------------------------- #
 # Non-Ontario provinces & metros (Phase 3 — more regions + province-correct LTT).
 # --------------------------------------------------------------------------- #
-# These tiers were added to fix the biggest correctness gap for non-Ontario users:
-# land-transfer tax and property district were previously an Ontario proxy. The
-# LTT (ltt_region) and property-tax rates below are the headline fix; the
-# appreciation / rent / benchmark_price macro figures are FIRST-PASS researched
-# estimates (2025-26, med/low confidence) pending the same scraper-grounding the
-# Ontario CMAs received — flagged inline. See SOURCES.
+# These tiers fix the biggest correctness gap for non-Ontario users: land-transfer
+# tax and property district were previously an Ontario proxy. Values are grounded
+# by the canada-housing-financial-scraper (2026-07-01): property_tax_rate = each
+# city's WOWA 2025 final residential rate (high confidence; Winnipeg/Saskatoon/
+# Regina converted from portioned assessment to effective-on-market); benchmark_price
+# = current CREA/board detached benchmarks; current_monthly_rent = CMHC HMIP +
+# Rentals.ca/Zumper 2025-26; home_appreciation_rate = forward-sustainable rate from
+# the boom-CAGR-minus-haircut methodology (Teranet per-city index levels remain
+# non-extractable, so these stay estimates — confidence flagged inline). See SOURCES.
 def _tier(**overrides) -> dict:
     """Build a region tier from NATIONAL_DEFAULTS, overriding only what differs.
 
@@ -250,118 +253,118 @@ def _tier(**overrides) -> dict:
 
 # --- British Columbia (postal V) — BC Property Transfer Tax ------------------ #
 VANCOUVER = _tier(
-    home_appreciation_rate=0.045,  # constrained land + demand vs extreme affordability ceiling. (med conf, first-pass)
+    home_appreciation_rate=0.045,  # supply-constrained; small haircut off boom CAGR. (med conf)
     current_monthly_rent=4600,     # Greater Vancouver detached blended asking, 2025-26
-    benchmark_price=1_900_000,     # Greater Vancouver detached benchmark (~2.9% gross yield)
-    property_tax_rate=0.00278,     # City of Vancouver ~0.278% (lowest in Canada; re-verify)
+    benchmark_price=1_975_000,     # REBGV detached benchmark ~$1.99M (Jun-25); ~2.8% gross yield
+    property_tax_rate=0.0031154,   # City of Vancouver 2025 residential 0.311540% (WOWA)
     ltt_region="bc",
 )
 BC_DEFAULTS = _tier(
-    home_appreciation_rate=0.0425,  # BC ex-Vancouver long-run, land-constrained. (low-med conf, first-pass)
-    current_monthly_rent=3200,
-    benchmark_price=950_000,
-    property_tax_rate=0.004,        # BC municipal avg ~0.4% (Victoria/Surrey/interior blend; re-verify)
+    home_appreciation_rate=0.0425,  # BC ex-Vancouver long-run, land-constrained. (low-med conf)
+    current_monthly_rent=3100,
+    benchmark_price=950_000,        # Victoria core ~$1.18M / interior (Kelowna/Kamloops) $650-900k blend
+    property_tax_rate=0.0045,       # Victoria 0.520% / Surrey 0.311% / interior ~0.45% blend (WOWA 2025)
     ltt_region="bc",
 )
 
 # --- Alberta (postal T) — no LTT, only land-title registration fees ---------- #
 CALGARY = _tier(
-    home_appreciation_rate=0.0375,  # elastic supply, oil-cyclical, strong 2022-24. (med conf, first-pass)
-    current_monthly_rent=2400,
-    benchmark_price=650_000,
-    property_tax_rate=0.0066,       # City of Calgary 2024 residential ~0.66% (re-verify)
+    home_appreciation_rate=0.0375,  # oil-cyclical, elastic supply → bigger haircut. (med conf)
+    current_monthly_rent=2450,
+    benchmark_price=700_000,        # detached benchmark ~$720-760k, 2025-26
+    property_tax_rate=0.0061803,    # City of Calgary 2025 residential 0.618030% (WOWA)
     ltt_region="alberta",
 )
 EDMONTON = _tier(
-    home_appreciation_rate=0.03,    # very elastic supply, flat long-run real prices. (med conf, first-pass)
-    current_monthly_rent=1950,
-    benchmark_price=450_000,
-    property_tax_rate=0.0096,       # City of Edmonton 2024 residential ~0.96% (re-verify)
+    home_appreciation_rate=0.03,    # very elastic supply, flat real prices → largest haircut. (med conf)
+    current_monthly_rent=2000,
+    benchmark_price=510_000,        # CREA SFD benchmark ~$531k, 2026
+    property_tax_rate=0.0101391,    # City of Edmonton 2025 residential 1.013910% (WOWA)
     ltt_region="alberta",
 )
 ALBERTA_DEFAULTS = _tier(
-    home_appreciation_rate=0.0325,
-    current_monthly_rent=2100,
-    benchmark_price=500_000,
-    property_tax_rate=0.0085,       # AB municipal avg (Red Deer/Lethbridge/north blend; re-verify)
+    home_appreciation_rate=0.0325,  # (low-med conf)
+    current_monthly_rent=2000,
+    benchmark_price=490_000,        # Red Deer/Lethbridge/Grande Prairie detached ~$400-480k
+    property_tax_rate=0.0105,       # AB small cities run higher than Calgary (Red Deer ~1.07%, Lethbridge ~1.2%)
     ltt_region="alberta",
 )
 
 # --- Quebec (postal G/H/J) — transfer duties ("welcome tax") ----------------- #
 MONTREAL = _tier(
-    home_appreciation_rate=0.04,    # strong post-2020 off an affordable base. (med conf, first-pass)
-    current_monthly_rent=2200,
-    benchmark_price=650_000,
-    property_tax_rate=0.0075,       # Ville de Montreal effective ~0.75% incl. services (re-verify)
+    home_appreciation_rate=0.04,    # affordable base, strong post-2020. (med conf)
+    current_monthly_rent=2300,
+    benchmark_price=650_000,        # Greater Montreal SFH median ~$645k, 2026
+    property_tax_rate=0.0075,       # Ville de Montreal base 0.661% + borough/water/services ~0.75% effective
     ltt_region="quebec_montreal",   # Montreal levies its own luxury-tier welcome tax
 )
 QUEBEC_DEFAULTS = _tier(
-    home_appreciation_rate=0.035,   # Quebec ex-Montreal (Quebec City, regions). (low-med conf, first-pass)
-    current_monthly_rent=1850,
-    benchmark_price=450_000,
-    property_tax_rate=0.0085,       # QC municipal avg (Quebec City ~0.87%; re-verify)
+    home_appreciation_rate=0.035,   # Quebec ex-Montreal (Quebec City, regions). (low-med conf)
+    current_monthly_rent=1900,
+    benchmark_price=475_000,        # Quebec City SFD median ~$478k, Q4-25
+    property_tax_rate=0.0087,       # Quebec City ~0.87-0.95% (WOWA)
     ltt_region="quebec",
 )
 
 # --- Manitoba (postal R) — Manitoba Land Transfer Tax ------------------------ #
 WINNIPEG = _tier(
-    home_appreciation_rate=0.035,   # steady, affordable prairie market. (med conf, first-pass)
-    current_monthly_rent=1900,
-    benchmark_price=400_000,
-    property_tax_rate=0.0125,       # City of Winnipeg municipal+education ~1.25% (re-verify)
+    home_appreciation_rate=0.035,   # steady, affordable, high-yield prairie market. (med conf)
+    current_monthly_rent=1950,
+    benchmark_price=410_000,        # avg ~$427k, 2026
+    property_tax_rate=0.0124,       # 2.755% headline on 45%-portioned assessment = 1.24% effective-on-market
     ltt_region="manitoba",
 )
 MANITOBA_DEFAULTS = _tier(
-    home_appreciation_rate=0.0325,
-    current_monthly_rent=1850,
-    benchmark_price=380_000,
-    property_tax_rate=0.013,
+    home_appreciation_rate=0.0325,  # (low conf)
+    current_monthly_rent=1800,
+    benchmark_price=370_000,        # Brandon/rural avg ~$320-360k
+    property_tax_rate=0.013,        # ~1.3-1.4% effective
     ltt_region="manitoba",
 )
 
 # --- Saskatchewan (postal S) — no LTT, 0.3% land-title fee ------------------- #
 SASKATCHEWAN_DEFAULTS = _tier(
-    home_appreciation_rate=0.03,    # flat, resource-linked (Saskatoon/Regina). (low-med conf, first-pass)
-    current_monthly_rent=1750,
-    benchmark_price=380_000,
-    property_tax_rate=0.011,        # Saskatoon ~1.03% / Regina ~1.16% blend (re-verify)
+    home_appreciation_rate=0.03,    # resource-linked, flat long-run. (med conf)
+    current_monthly_rent=1800,
+    benchmark_price=400_000,        # Saskatoon benchmark ~$435k / Regina ~$344k blend
+    property_tax_rate=0.011,        # Saskatoon 1.251%x80%=1.00% / Regina 1.487%x80%=1.19% -> ~1.1% effective
     ltt_region="saskatchewan",
 )
 
 # --- Atlantic (postal A/B/C/E) — per-province deed/transfer taxes ------------ #
 HALIFAX = _tier(
-    home_appreciation_rate=0.04,    # hot post-2020 in-migration. (med conf, first-pass)
-    current_monthly_rent=2500,
-    benchmark_price=550_000,
-    property_tax_rate=0.0115,       # HRM residential ~1.15% incl. area rates (re-verify)
+    home_appreciation_rate=0.04,    # strong in-migration post-2020. (med conf)
+    current_monthly_rent=2600,
+    benchmark_price=600_000,        # avg ~$629k, 2026
+    property_tax_rate=0.012,        # HRM general 1.197% + urban area rates ~1.2% (WOWA)
     ltt_region="nova_scotia",       # HRM deed transfer 1.5%
 )
 NOVA_SCOTIA_DEFAULTS = _tier(
-    home_appreciation_rate=0.04,
-    current_monthly_rent=2100,
-    benchmark_price=480_000,
+    home_appreciation_rate=0.0375,  # rural NS surged on remote-work but structurally slower than HRM. (low-med conf)
+    current_monthly_rent=2000,
+    benchmark_price=430_000,        # Cape Breton/Truro detached ~$350-420k
     property_tax_rate=0.0115,
     ltt_region="nova_scotia",
 )
 NEW_BRUNSWICK_DEFAULTS = _tier(
-    home_appreciation_rate=0.035,
-    current_monthly_rent=1750,
-    benchmark_price=350_000,
-    property_tax_rate=0.015,        # NB provincial+municipal residential ~1.5% (re-verify)
+    home_appreciation_rate=0.035,   # big post-2020 boom off a low base. (med conf)
+    current_monthly_rent=1850,
+    benchmark_price=380_000,        # Moncton ~$421k / Fredericton ~$350k / Saint John ~$330k blend
+    property_tax_rate=0.0165,       # Moncton 1.923% / Fredericton ~1.4% / Saint John ~1.8% blend
     ltt_region="new_brunswick",
 )
 PEI_DEFAULTS = _tier(
-    home_appreciation_rate=0.04,
+    home_appreciation_rate=0.04,    # small/volatile market. (low conf)
     current_monthly_rent=1900,
-    benchmark_price=420_000,
-    property_tax_rate=0.015,
+    benchmark_price=430_000,        # Charlottetown avg ~$419k
+    property_tax_rate=0.015,        # headline 1.67% incl. non-owner surtax; owner-occupied ~1.1-1.3% (kept conservative)
     ltt_region="pei",
 )
 NEWFOUNDLAND_DEFAULTS = _tier(
-    home_appreciation_rate=0.025,   # flat/declining outside St. John's. (low conf, first-pass)
-    current_monthly_rent=1600,
-    benchmark_price=350_000,
-    property_tax_rate=0.0083,       # St. John's ~0.83% (re-verify)
+    home_appreciation_rate=0.0275,  # up 11% in 2025 but oil-dependence caps long-run. (low conf)
+    current_monthly_rent=1750,
+    benchmark_price=400_000,        # St. John's avg ~$410-424k, 2025
+    property_tax_rate=0.0091,       # St. John's 9.1 mills = 0.91% + fixed water
     ltt_region="newfoundland",
 )
 
@@ -575,11 +578,20 @@ SOURCES = {
         "first-letter (V=BC, T=AB, S=SK, R=MB, G/H/J=QC, A/B/C/E=Atlantic; K/L/M/N/P=ON), with metro "
         "overrides for Vancouver, Calgary, Edmonton, Montreal, Winnipeg, and Halifax. Each tier carries "
         "a province-correct ltt_region so land-transfer tax (BC PTT, MB LTT, QC/Montreal welcome tax, "
-        "AB/SK title fees, NS/NB/PE/NL deed taxes) and the CMHC-premium PST are computed with the right "
-        "provincial rules -- the headline correctness fix. NOTE: the appreciation / rent / benchmark_price "
-        "macro figures for the non-Ontario tiers are FIRST-PASS researched estimates (med/low confidence, "
-        "flagged inline) pending the same Teranet/CREA/CMHC scraper-grounding the Ontario CMAs received; "
-        "property-tax rates are city figures to re-verify against current by-laws."
+        "AB/SK title fees, NS/NB/PE/NL deed taxes) and the CMHC-premium PST use the right provincial "
+        "rules. The non-Ontario tiers were scraper-grounded (2026-07-01): property_tax_rate = each city's "
+        "WOWA 2025 final residential rate (Winnipeg/Saskatoon/Regina converted from portioned assessment "
+        "to effective-on-market); benchmark_price = current CREA/board detached benchmarks; rent = CMHC "
+        "HMIP + Rentals.ca/Zumper. Appreciation stays a forward-sustainable estimate (boom CAGR minus "
+        "haircut) since per-city Teranet index levels are not fetch-extractable; confidence is flagged "
+        "inline (Manitoba/NS-ex-Halifax/PEI/NL are lowest)."
+    ),
+    "province_metro_data": (
+        "Non-Ontario property-tax rates: wowa.ca/taxes/<city>-property-tax (2025 finals, cities: vancouver, "
+        "surrey, victoria, calgary, edmonton, winnipeg, saskatoon, regina, montreal, quebeccity, halifax, "
+        "moncton, charlottetown, stjohns). Benchmarks/prices: CREA MLS HPI + boards (REBGV gvrealtors.ca/"
+        "market-watch, Saskatchewan stats.crea.ca/board/sra, NL/NB creastats.crea.ca) + Royal LePage "
+        "quarterly reports. Rents: CMHC HMIP (www03.cmhc-schl.gc.ca/hmip-pimh) + Rentals.ca/Zumper 2025-26."
     ),
     "address_geocoding": (
         "Optional 'find by address' form helper geocodes a typed address to its "

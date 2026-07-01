@@ -300,10 +300,12 @@ A pragmatic order that front-loads value and respects dependencies:
   land-transfer tax** (BC PTT, MB LTT, QC/Montréal welcome tax, AB/SK title fees,
   NS/NB/PE/NL deed taxes) + province-aware CMHC-premium PST, and metro tiers for
   Vancouver/Calgary/Edmonton/Montréal/Winnipeg/Halifax (`evaluator/tax.py` +
-  `data.py`). The LTT/property-tax correctness is done and tested; the
-  non-Ontario appreciation/rent **macro** figures are first-pass estimates still
-  awaiting the scraper-grounding the Ontario CMAs got. *(remaining: scraper pass
-  for the new regions; CMHC-HMIP rent grounding.)*
+  `data.py`). The LTT/property-tax correctness is done and tested, and the
+  non-Ontario tiers are **scraper-grounded (2026-07-01)**: property-tax rates
+  (WOWA 2025 finals), benchmark prices (CREA/board), and rents (CMHC HMIP) are
+  sourced; only long-run appreciation stays a forward-sustainable estimate
+  (per-city Teranet index levels aren't fetch-extractable). *(remaining: a proper
+  per-city HPI series would let appreciation be computed bottom-up too.)*
 - Address autofill + comparable rentals. **🔨 Address autofill done (2026-07-01):**
   a "find by address" box on the form geocodes a typed street address to its
   Canadian postal code via free **OpenStreetMap Nominatim** (`evaluator/geocode.py`,

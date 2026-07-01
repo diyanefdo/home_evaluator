@@ -100,8 +100,10 @@ LTT, Québec transfer duties (plus Montréal's luxury tiers), Nova Scotia / New
 Brunswick / PEI / Newfoundland deed taxes, and Ontario (+ Toronto municipal),
 while Alberta and Saskatchewan — which levy no LTT — get only their small
 land-title fees. The CMHC-premium PST is likewise province-aware (ON/MB 8%, QC
-9.975%, SK 6%, others none). The non-Ontario appreciation/rent assumptions are
-first-pass researched estimates pending scraper-grounding (see `data.py`).
+9.975%, SK 6%, others none). The non-Ontario **property-tax rates** (WOWA 2025
+finals), **benchmark prices** (CREA/board), and **rents** (CMHC HMIP) are
+data-grounded; only **appreciation** stays a forward-sustainable estimate (see
+`data.py` SOURCES).
 
 **Rent is estimated from your home's price**, not a flat regional average. Each
 region carries a benchmark price/rent pair; the comparable rent is scaled from it
