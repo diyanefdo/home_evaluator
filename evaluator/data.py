@@ -581,6 +581,12 @@ SOURCES = {
         "flagged inline) pending the same Teranet/CREA/CMHC scraper-grounding the Ontario CMAs received; "
         "property-tax rates are city figures to re-verify against current by-laws."
     ),
+    "address_geocoding": (
+        "Optional 'find by address' form helper geocodes a typed address to its "
+        "Canadian postal code via OpenStreetMap Nominatim (https://nominatim.org/); "
+        "only the postal code is used, to route regional assumptions. Cached, with "
+        "graceful fallback to manual postal entry. See evaluator/geocode.py."
+    ),
     "province_ltt": (
         "Land-transfer/property-transfer tax rules per province (see evaluator/tax.py SOURCES): "
         "BC Property Transfer Tax; Manitoba LTT; Quebec transfer duties + Ville de Montreal luxury tiers; "

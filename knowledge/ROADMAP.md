@@ -304,8 +304,12 @@ A pragmatic order that front-loads value and respects dependencies:
   non-Ontario appreciation/rent **macro** figures are first-pass estimates still
   awaiting the scraper-grounding the Ontario CMAs got. *(remaining: scraper pass
   for the new regions; CMHC-HMIP rent grounding.)*
-- Address autofill + comparable rentals. *(remaining — autofill is unblocked via a
-  free geocoder; comparable rentals need a data feed.)*
+- Address autofill + comparable rentals. **🔨 Address autofill done (2026-07-01):**
+  a "find by address" box on the form geocodes a typed street address to its
+  Canadian postal code via free **OpenStreetMap Nominatim** (`evaluator/geocode.py`,
+  stdlib + disk cache + graceful fallback) and auto-fills the postal field,
+  showing the region it routes to (`/api/geocode`). *(remaining: comparable
+  rentals — needs a rental data feed; and a price estimate — needs listings.)*
 - Nearby listings (only with a properly-sourced/legal data feed). *(blocked — no
   free/legal MLS feed; needs paid/licensed access.)*
 

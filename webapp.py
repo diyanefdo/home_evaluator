@@ -26,7 +26,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 
-from evaluator import cli, data, projections, tax
+from evaluator import cli, data, geocode, projections, tax
 
 # Optional Phase 2 stack (persistence + Google OAuth). Imported defensively so the
 # app still runs as a stateless tool when the extra deps aren't installed.
@@ -894,9 +894,18 @@ FORM = PAGE_HEAD + """
         <small>Amortization length.</small>
       </div>
       <div class="field">
+        <label for="address">Find by address (optional)</label>
+        <div style="display:flex;gap:.4rem">
+          <input id="address" placeholder="e.g. 290 Bremner Blvd, Toronto" style="flex:1;min-width:0">
+          <button type="button" onclick="geocodeAddr()"
+            style="flex:none;width:auto;padding:0 .9rem">Find</button>
+        </div>
+        <small id="addr_status">Auto-fills the postal code from a street address.</small>
+      </div>
+      <div class="field">
         <label for="postal">Postal code</label>
         <input id="postal" name="postal" value="M2J 0E8">
-        <small>Sets regional rates &amp; rent.</small>
+        <small>Sets regional rates, land-transfer tax &amp; rent.</small>
       </div>
       <div class="field">
         <label for="age">Your age</label>
@@ -932,6 +941,22 @@ FORM = PAGE_HEAD + """
 <p class="disclaimer">
   Projections use long-run historical assumptions and are not financial advice.
 </p>
+<script>
+function geocodeAddr(){
+  var a=document.getElementById('address').value.trim();
+  var s=document.getElementById('addr_status');
+  if(a.length<3){s.textContent='Enter an address first.';return;}
+  s.textContent='Looking up…';
+  fetch('/api/geocode?q='+encodeURIComponent(a)).then(function(r){return r.json();}).then(function(d){
+    if(d&&d.ok){
+      document.getElementById('postal').value=d.postal;
+      s.textContent='Found '+d.postal+(d.region?' → '+d.region:'');
+    }else{
+      s.textContent='No match — enter the postal code manually.';
+    }
+  }).catch(function(){s.textContent='Lookup failed — enter the postal code manually.';});
+}
+</script>
 """ + PAGE_FOOT
 
 
@@ -1124,6 +1149,29 @@ def home(request: Request, _: None = Depends(require_auth)) -> str:
 @app.get("/healthz")
 def healthz() -> dict:
     return {"status": "ok", "accounts": _OAUTH_ON, "db": _DB_ON}
+
+
+@app.get("/api/geocode")
+def api_geocode(q: str = "") -> JSONResponse:
+    """Resolve a typed address to a Canadian postal code + the region it routes to.
+
+    Powers the form's "find by address" helper: the browser sends the address,
+    we return the postal code and the regional label so the form can auto-fill
+    the postal field. Returns ``{"ok": false}`` (200) when nothing is found, so
+    the UI degrades to manual postal entry.
+    """
+    hit = geocode.geocode_address(q)
+    if not hit:
+        return JSONResponse({"ok": False})
+    region = data.get_params(hit["postal"]).get("_region", "")
+    return JSONResponse({
+        "ok": True,
+        "postal": hit["postal"],
+        "city": hit.get("city", ""),
+        "province": hit.get("province", ""),
+        "region": region,
+        "label": hit.get("label", ""),
+    })
 
 
 # --------------------------------------------------------------------------- #

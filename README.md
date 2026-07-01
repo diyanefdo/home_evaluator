@@ -111,6 +111,12 @@ home gets a higher comparable rent and a cheaper one a lower rent, while gross
 rental yields realistically fall as price rises. Override with `--rent` (CLI) or
 the rent what-if slider (web).
 
+**Address autofill (web):** the form has an optional "find by address" box — type
+a street address and the tool geocodes it to a Canadian postal code via free
+[OpenStreetMap Nominatim](https://nominatim.org/) (`evaluator/geocode.py`; stdlib,
+cached, graceful fallback to manual entry) and fills in the postal code, showing
+the region it routes to. See `/api/geocode`.
+
 The **5-year mortgage rate is live**: with `--live` (CLI) or `EVALUATOR_LIVE_DATA`
 (web; on by default) the tool overlays the current discounted fixed rate derived
 from the **Bank of Canada Valet API** (5-yr Government of Canada benchmark yield +
