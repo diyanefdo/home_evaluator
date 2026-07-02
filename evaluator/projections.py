@@ -28,6 +28,7 @@ data-keys into these). Defaults are applied for the optional keys.
     investment_return_rate  : float  -- annual nominal return on invested savings (S&P 500).
     insurance_annual        : float  -- annual home insurance dollars (default 1500.0).
     hoa_monthly             : float  -- monthly HOA/condo fee dollars (default 0.0).
+    carrying_cost_growth_rate : float -- annual growth of insurance + HOA (default 0.03).
     currency_symbol         : str    -- display symbol (default "$"); not used in math.
 
     -- Tax layer (registered-account sheltering + capital-gains tax) --
@@ -50,6 +51,7 @@ Modelling notes
   appreciated home value (NOT held flat), so it correctly pushes the
   rent-vs-ownership crossover later and shrinks the renter's monthly DCA.
 * Property tax grows annually at ``property_tax_growth_rate`` (also not flat).
+* Insurance + HOA grow annually at ``carrying_cost_growth_rate`` (also not flat).
 * Maintenance dollars are folded into the ``cum_insurance_hoa`` bucket (the
   chart's "other carrying costs" layer) so the cost stack is true cash outlay.
 * Investment compounding uses the effective monthly rate
@@ -69,6 +71,10 @@ from evaluator import tax
 _DEFAULTS = {
     "insurance_annual": 1500.0,
     "hoa_monthly": 0.0,
+    # Insurance premiums and condo fees rise over time; grow them like the
+    # property-tax bill rather than holding them flat in nominal dollars. ~3%/yr
+    # is a reasonable long-run cost-inflation figure (insurance has run at/above CPI).
+    "carrying_cost_growth_rate": 0.03,
     "currency_symbol": "$",
     "current_age": 35,
     "annual_income": 120_000.0,
@@ -332,11 +338,12 @@ def build_projection(params: dict) -> dict:
     annual_tax_base = price * float(params["property_tax_rate"])
     m_tax = annual_tax_base * (1 + ptg) ** year_of_month / 12.0
 
-    # Insurance + HOA (held flat in nominal terms; folds into the carrying-cost
-    # bucket alongside maintenance).
+    # Insurance + HOA: grow each year at the carrying-cost inflation rate (like the
+    # property-tax bill), charged monthly — premiums and condo fees don't stay flat.
     insurance_annual = float(_p(params, "insurance_annual"))
     hoa_monthly = float(_p(params, "hoa_monthly"))
-    m_ins_hoa = np.full(n, insurance_annual / 12.0 + hoa_monthly)
+    ccg = float(_p(params, "carrying_cost_growth_rate"))
+    m_ins_hoa = (insurance_annual / 12.0 + hoa_monthly) * (1 + ccg) ** year_of_month
 
     # Maintenance: a fraction of THIS MONTH'S appreciated home value, monthly.
     maint_pct = float(params["maintenance_pct_of_value"])

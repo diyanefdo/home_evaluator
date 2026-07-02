@@ -1326,7 +1326,7 @@ def _methodology_html() -> str:
         + '<li>Rates (appreciation, rent growth, returns) are <b>long-run averages</b> applied '
         + 'smoothly &mdash; the real world is volatile and path-dependent.</li>'
         + '<li>The mortgage rate is held fixed for the whole term (no renewal-rate changes).</li>'
-        + '<li>Insurance and condo fees are held flat in nominal terms.</li>'
+        + '<li>Insurance and condo fees grow ~3%/yr (not held flat), like the property-tax bill.</li>'
         + '<li>Rent for a comparable home is a single figure, not a range.</li>'
         + '<li>Figures are in <b>future (nominal) dollars</b> by default; tick '
         + '<b>&ldquo;Show in today&rsquo;s dollars&rdquo;</b> in the what-if panel to deflate '

@@ -162,7 +162,10 @@ appreciation × return grid (e.g. 4/5/6/7% × 7/10%) would make this visible.
   `projections.deflate_projection` handles level series pointwise, cumulative costs
   by per-year flow, and monthly series per month; the verdict is invariant. The
   engine stays nominal — this is a display transform only.
-- **Home insurance held flat** at $1,500/yr (should grow with inflation; minor).
+- ~~**Home insurance held flat** at $1,500/yr (should grow with inflation; minor).~~
+  **Fixed (2026-07-01):** insurance + HOA/condo fees now grow annually at
+  `carrying_cost_growth_rate` (default 3%/yr), like the property-tax bill, instead
+  of staying flat in nominal terms.
 - **Property tax** grows on its own bill at 3.5%/yr, decoupled from appreciation
   — realistic, not a flaw, but worth noting.
 

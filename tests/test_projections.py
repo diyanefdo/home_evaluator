@@ -98,6 +98,19 @@ class TestRealDollars:
         assert real["purchase_closing_costs"] == pytest.approx(summary["purchase_closing_costs"])
 
 
+class TestCarryingCosts:
+    def test_insurance_and_hoa_grow_over_time(self, make_args):
+        # Isolate the insurance+HOA line from maintenance to check it's not flat.
+        params = cli.build_engine_params(make_args(insurance=1500, hoa=0))
+        params["maintenance_pct_of_value"] = 0.0
+        proj = projections.build_projection(params)
+        cum = proj["cum_insurance_hoa"]
+        flows = [cum[y] - cum[y - 1] for y in range(1, len(cum))]
+        assert flows[-1] > flows[0]                       # grows, not flat
+        assert flows[0] == pytest.approx(1500.0)          # year 1 = base premium
+        assert flows[-1] == pytest.approx(1500.0 * 1.03 ** 29, rel=0.01)  # year 30 grown at 3%
+
+
 class TestCashFlowMatching:
     def test_larger_down_payment_reduces_interest(self, make_args):
         small = cli.build_engine_params(make_args(down="200000"))
