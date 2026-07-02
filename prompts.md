@@ -856,3 +856,7 @@ have you adjusted the logic to account for inflation
 ## 2026-07-01 20:09:46
 
 yes do that
+
+## 2026-07-01 20:21:58
+
+fix the insurance issue
