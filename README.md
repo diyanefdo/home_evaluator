@@ -79,6 +79,17 @@ Every regional assumption can be overridden from the CLI (see `--help`):
 `--rate`, `--appreciation`, `--rent`, `--rent-growth`, `--property-tax-rate`,
 `--investment-return`, `--insurance`, `--hoa`.
 
+### Variable-rate mortgage renewals
+
+Canada has no 30-year fixed rate — you renew every ~5 years. By default the tool
+applies one rate for the whole amortization, but `--renewals` (CLI) or the **"Model
+5-year renewals"** toggle (web) makes the `--rate` apply only for the first term,
+then the mortgage **renews at `--renewal-rate`** (default = the region's long-run
+5-yr-fixed average, ~5.5%) for the remaining amortization. At each renewal the
+current balance is re-amortized over the remaining years, so the payment resets
+(e.g. $4,006 → $4,471/mo when 4.4% renews to 5.5%). `--rate-term` sets the renewal
+frequency (default 5 years).
+
 ### Today's-dollars (real) view
 
 By default all figures are **nominal** (future dollars). Add `--real` (CLI) or tick

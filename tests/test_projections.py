@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from evaluator import cli, projections
@@ -109,6 +110,50 @@ class TestCarryingCosts:
         assert flows[-1] > flows[0]                       # grows, not flat
         assert flows[0] == pytest.approx(1500.0)          # year 1 = base premium
         assert flows[-1] == pytest.approx(1500.0 * 1.03 ** 29, rel=0.01)  # year 30 grown at 3%
+
+
+class TestRenewals:
+    def _proj(self, make_args, **renewal):
+        params = cli.build_engine_params(make_args())
+        params.update(renewal)
+        proj = projections.build_projection(params)
+        return params, proj, projections.compute_summary(proj, params)
+
+    def test_disabled_matches_fixed(self, make_args):
+        _p, _pr, fixed = self._proj(make_args)  # renewals off by default
+        assert fixed["renewals_enabled"] is False
+        # A renewal at the SAME rate must be an exact no-op.
+        params = cli.build_engine_params(make_args())
+        params.update(renewals_enabled=True, renewal_rate=params["mortgage_rate"])
+        same = projections.compute_summary(projections.build_projection(params), params)
+        assert same["total_interest_paid"] == pytest.approx(fixed["total_interest_paid"])
+
+    def test_higher_renewal_rate_costs_more_and_jumps_payment(self, make_args):
+        _p, _pr, fixed = self._proj(make_args)
+        params, proj, s = self._proj(make_args, renewals_enabled=True,
+                                     renewal_rate=0.065, rate_term_years=5)
+        assert s["total_interest_paid"] > fixed["total_interest_paid"]
+        assert s["renewal_payment"] > s["mortgage_payment"]      # payment jumps up
+        assert proj["loan_balance"][-1] == pytest.approx(0.0, abs=1.0)  # still pays off
+
+    def test_lower_renewal_rate_costs_less(self, make_args):
+        _p, _pr, fixed = self._proj(make_args)
+        _p2, _pr2, s = self._proj(make_args, renewals_enabled=True, renewal_rate=0.02)
+        assert s["total_interest_paid"] < fixed["total_interest_paid"]
+
+    def test_renewal_shows_up_in_ownership_cost(self, make_args):
+        # P&I is embedded in monthly_ownership_cost, so a rate jump at renewal must
+        # push the payment component up right after the term boundary.
+        _p, proj, _s = self._proj(make_args, renewals_enabled=True,
+                                   renewal_rate=0.08, rate_term_years=5)
+        pay = np.asarray([r["payment"] for r in proj["renewal_schedule"]])
+        assert pay[1] > pay[0]
+
+    def test_rate_term_controls_renewal_count(self, make_args):
+        _p, proj, _s = self._proj(make_args, renewals_enabled=True,
+                                   renewal_rate=0.055, rate_term_years=10)
+        # 30-yr amortization, 10-yr terms -> 3 terms.
+        assert len(proj["renewal_schedule"]) == 3
 
 
 class TestCashFlowMatching:

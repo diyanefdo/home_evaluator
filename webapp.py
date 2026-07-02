@@ -614,6 +614,13 @@ function wfDollarsNote(){
     ? '\\u2713 today\\u2019s dollars ('+(inf?inf.value:2)+'%/yr)'
     : 'future (nominal) dollars';
 }
+function wfRenewNote(){
+  var el=document.getElementById('wf-renew-note'); if(!el) return;
+  var r=document.getElementById('wf-renew'), rr=document.getElementById('wf-renew-rate');
+  el.textContent=(r&&r.checked)
+    ? '\\u2713 renews at '+(rr?rr.value:5.5)+'% every 5 yrs'
+    : 'rate fixed for the full term';
+}
 function wfRecompute(){
   var q=new URLSearchParams(BASE);
   q.set('down', document.getElementById('s-down').value+'%');
@@ -624,7 +631,10 @@ function wfRecompute(){
   var rc=document.getElementById('wf-real');
   if(rc&&rc.checked){q.set('real','true');
     var inf=document.getElementById('wf-infl'); if(inf) q.set('inflation', (inf.value/100));}
-  wfDollarsNote();
+  var rn=document.getElementById('wf-renew');
+  if(rn&&rn.checked){q.set('renewals','true');
+    var rr=document.getElementById('wf-renew-rate'); if(rr) q.set('renewal_rate', (rr.value/100));}
+  wfDollarsNote(); wfRenewNote();
   wfStatus(true);
   fetch('/api/recompute?'+q.toString()).then(function(r){return r.json();}).then(function(d){
     wfStatus(false);
@@ -650,8 +660,15 @@ if(wfInflEl) wfInflEl.addEventListener('input', function(){
   wfDollarsNote();
   if(document.getElementById('wf-real').checked){clearTimeout(WF_T);WF_T=setTimeout(wfRecompute,350);}
 });
+var wfRenewEl=document.getElementById('wf-renew');
+if(wfRenewEl) wfRenewEl.addEventListener('change', function(){wfRenewNote();wfRecompute();});
+var wfRenewRate=document.getElementById('wf-renew-rate');
+if(wfRenewRate) wfRenewRate.addEventListener('input', function(){
+  wfRenewNote();
+  if(document.getElementById('wf-renew').checked){clearTimeout(WF_T);WF_T=setTimeout(wfRecompute,350);}
+});
 wfLabels();
-wfDollarsNote();
+wfDollarsNote(); wfRenewNote();
 """
 
 # Save + share behaviour. RESULT_INPUTS (+ SCEN_ID) are injected per result;
@@ -1053,6 +1070,7 @@ def _run_scenario(
     rate=None, appreciation=None, rent=None, rent_growth=None,
     property_tax_rate=None, investment_return=None, insurance=1500.0, hoa=0.0,
     retirement_rate=None, show_real=False, inflation=None,
+    renewals=False, renewal_rate=None,
 ) -> dict:
     """Validate inputs, run the full pipeline, build the chart data.
 
@@ -1088,6 +1106,7 @@ def _run_scenario(
         rate=rate, appreciation=appreciation, rent=rent, rent_growth=rent_growth,
         property_tax_rate=property_tax_rate, investment_return=investment_return,
         insurance=insurance, hoa=hoa, out=None, no_charts=False,
+        renewals=renewals, renewal_rate=renewal_rate, rate_term=None,
     )
     real_inflation = (projections.DEFAULT_INFLATION if inflation is None else float(inflation))
     try:
@@ -1130,6 +1149,8 @@ def _run_scenario(
         "years": int(years),
         "show_real": bool(show_real),
         "real_inflation": real_inflation,
+        "renewals": bool(summary.get("renewals_enabled")),
+        "renewal_rate": summary.get("renewal_rate"),
     }
 
 
@@ -1159,9 +1180,14 @@ def _result_fields(sc: dict) -> dict:
     rate_is_live = lm and abs(params["mortgage_rate"] - lm["rate"]) < 1e-9
     rate_badge = (f' <span class="live-badge" title="Bank of Canada, as of {html.escape(lm["as_of"])}">live</span>'
                   if rate_is_live else "")
+    mortgage_str = f'{years} yr <small>@ {params["mortgage_rate"] * 100:.2f}%</small>{rate_badge}'
+    if summary.get("renewals_enabled"):
+        mortgage_str += (f' <small>&rarr; renews {summary.get("renewal_rate", 0) * 100:.2f}% '
+                         f'({sym}{summary.get("mortgage_payment", 0):,.0f}&rarr;'
+                         f'{sym}{summary.get("renewal_payment", 0):,.0f}/mo)</small>')
     stats = {
         "down": f'{sym}{params["down_payment"]:,.0f} <small>({sc["pct"]:.0f}%)</small>',
-        "mortgage": f'{years} yr <small>@ {params["mortgage_rate"] * 100:.2f}%</small>{rate_badge}',
+        "mortgage": mortgage_str,
         "crossover": sc["cross"],
         "renter_tax": f'{sym}{summary.get("renter_tax_paid", 0):,.0f}',
         "buy_costs": _buy_costs_field(sym, summary, params),
@@ -1325,7 +1351,9 @@ def _methodology_html() -> str:
         + '<ul>'
         + '<li>Rates (appreciation, rent growth, returns) are <b>long-run averages</b> applied '
         + 'smoothly &mdash; the real world is volatile and path-dependent.</li>'
-        + '<li>The mortgage rate is held fixed for the whole term (no renewal-rate changes).</li>'
+        + '<li>By default one rate applies for the whole amortization; tick <b>&ldquo;Model '
+        + '5-year renewals&rdquo;</b> to renew at a chosen rate every 5 years (Canadian style) &mdash; '
+        + 'the payment resets on the remaining balance at each renewal.</li>'
         + '<li>Insurance and condo fees grow ~3%/yr (not held flat), like the property-tax bill.</li>'
         + '<li>Rent for a comparable home is a single figure, not a range.</li>'
         + '<li>Figures are in <b>future (nominal) dollars</b> by default; tick '
@@ -1881,6 +1909,13 @@ def _render_result_html(sc: dict, inputs: dict, *, user: dict | None = None,
         f'value="{sc.get("real_inflation", projections.DEFAULT_INFLATION) * 100:g}">%/yr inflation</span>'
         '<span class="wf-dollars-note" id="wf-dollars-note"></span>'
         '</div>'
+        '<div class="wf-real wf-renew">'
+        f'<label><input type="checkbox" id="wf-renew" {"checked" if sc.get("renewals") else ""}> '
+        'Model 5-year renewals</label>'
+        '<span class="wf-real-infl">renew at <input type="number" id="wf-renew-rate" min="0" max="15" '
+        f'step="0.1" value="{sc["params"].get("renewal_rate", 0.055) * 100:g}">%</span>'
+        '<span class="wf-dollars-note" id="wf-renew-note"></span>'
+        '</div>'
         '</section>'
     )
 
@@ -1998,6 +2033,8 @@ def evaluate(
     retirement_rate: float | None = None,
     real: bool = False,             # show all dollars in today's (inflation-adjusted) money
     inflation: float | None = None,  # inflation for the real view (default 2%)
+    renewals: bool = False,          # model 5-year rate renewals
+    renewal_rate: float | None = None,
     sid: int | None = None,   # set when reopening a saved scenario (for "Update")
     _: None = Depends(require_auth),
 ):
@@ -2008,7 +2045,7 @@ def evaluate(
             rate=rate, appreciation=appreciation, rent=rent, rent_growth=rent_growth,
             property_tax_rate=property_tax_rate, investment_return=investment_return,
             insurance=insurance, hoa=hoa, retirement_rate=retirement_rate,
-            show_real=real, inflation=inflation,
+            show_real=real, inflation=inflation, renewals=renewals, renewal_rate=renewal_rate,
         )
     except ValueError as exc:
         return _error_page(str(exc))
@@ -2052,6 +2089,8 @@ def recompute(
     investment_return: float | None = None,
     real: bool = False,
     inflation: float | None = None,
+    renewals: bool = False,
+    renewal_rate: float | None = None,
     _: None = Depends(require_auth),
 ) -> JSONResponse:
     """JSON endpoint powering the what-if sliders: new chart data + headline.
@@ -2065,6 +2104,7 @@ def recompute(
             age=age, income=income, strategy=strategy, first_time=first_time,
             rate=rate, appreciation=appreciation, rent=rent,
             investment_return=investment_return, show_real=real, inflation=inflation,
+            renewals=renewals, renewal_rate=renewal_rate,
         )
     except ValueError as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)

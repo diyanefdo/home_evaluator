@@ -146,7 +146,7 @@ priority than just researching them once into the Ontario/CMA tiers above.
 | ~~**Sensitivity grid** (gap #6)~~ ✅ **DONE** | Chart 6: appreciation × investment-return heatmap with the scenario's cell outlined (`build_sensitivity()` + `_chart_sensitivity`). | M | High |
 | **Terminal value / imputed rent** (gap #5) | Value the owner's near-rent-free years after payoff — extend a few years past the term or add a housing-cost differential. | M | Medium |
 | **Monte Carlo** | Instead of point estimates, simulate distributions of returns/appreciation → "buying wins in X% of scenarios" with confidence bands. | L | High (credibility) |
-| **Variable mortgage rates / renewals** | Model 5-yr renewals at projected rates instead of one fixed rate for 30 years (more realistic for Canada). | M | Medium |
+| ~~**Variable mortgage rates / renewals**~~ ✅ **DONE** (2026-07-01) | `--renewals` / "Model 5-year renewals" toggle: the rate applies for the first term, then renews at `--renewal-rate` (default regional long-run 5yr-fixed avg) for the remaining amortization; payment resets each renewal. `--rate-term` sets frequency. | M | Medium |
 | **CMHC insurance for <20% down** | Add mortgage default insurance premiums when down payment is under 20%. | S | Medium |
 | ~~**Real (inflation-adjusted) view**~~ ✅ **DONE** (gap #7) | `--real` / "Show in today's dollars" toggle deflates all series to present-day dollars (configurable inflation, default 2%); verdict-invariant display transform (`projections.deflate_projection`). | S | Medium |
 | **Rental income / house hacking** | Model a basement suite or roommate offsetting ownership cost. | M | Medium |

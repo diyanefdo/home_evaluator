@@ -75,6 +75,7 @@ _DEFAULTS = {
     # property-tax bill rather than holding them flat in nominal dollars. ~3%/yr
     # is a reasonable long-run cost-inflation figure (insurance has run at/above CPI).
     "carrying_cost_growth_rate": 0.03,
+    "rate_term_years": 5,          # Canadian rate term: renew the mortgage rate every 5 yrs
     "currency_symbol": "$",
     "current_age": 35,
     "annual_income": 120_000.0,
@@ -298,30 +299,50 @@ def build_projection(params: dict) -> dict:
     loan0 = price - down + cmhc_premium
 
     annual_rate = float(params["mortgage_rate"])
-    mrate = annual_rate / 12.0
     appr = float(params["appreciation_rate"])
 
     invest = float(params["investment_return_rate"])
     mrate_inv = (1 + invest) ** (1 / 12) - 1
 
-    # ---- Amortization (fixed-rate, monthly), then sample to annual ----------
-    # Guard against a zero-rate loan (avoids division by zero in the P&I formula).
-    if mrate == 0.0:
-        pmt = loan0 / n
-    else:
-        pmt = loan0 * (mrate * (1 + mrate) ** n) / ((1 + mrate) ** n - 1)
+    # ---- Amortization with 5-year rate renewals (Canadian style) ------------
+    # A Canadian mortgage locks its rate for a TERM (default 5 yrs), not the whole
+    # amortization. At each renewal the current balance is re-amortized over the
+    # REMAINING amortization at the new rate, so the payment resets. The first term
+    # uses the current rate; later terms use ``renewal_rate`` (the long-run 5yr-fixed
+    # average) when renewals are enabled. When they're OFF (or the renewal rate
+    # equals the current rate), re-amortizing at the same rate is a no-op that
+    # reproduces the single-fixed-rate schedule exactly.
+    renewals_on = bool(params.get("renewals_enabled", False))
+    rate_term_months = max(1, int(_p(params, "rate_term_years")) * 12)
+    renewal_rate = float(params.get("renewal_rate") or annual_rate)
+
+    def _term_rate(term_idx: int) -> float:
+        return annual_rate if (term_idx == 0 or not renewals_on) else renewal_rate
 
     bal = loan0
     m_principal = np.zeros(n)
     m_interest = np.zeros(n)
     m_balance = np.zeros(n)
+    m_payment = np.zeros(n)
+    mrate, pmt = annual_rate / 12.0, 0.0
+    renewal_schedule: list[dict] = []
     for i in range(n):
+        if i % rate_term_months == 0:          # start of a (re)negotiated term
+            r_annual = _term_rate(i // rate_term_months)
+            mrate = r_annual / 12.0
+            remaining = n - i                  # re-amortize over the remaining months
+            pmt = (bal / remaining if mrate == 0.0
+                   else bal * (mrate * (1 + mrate) ** remaining) / ((1 + mrate) ** remaining - 1))
+            renewal_schedule.append(
+                {"month": i, "year": i // 12, "rate": r_annual, "payment": pmt, "balance": bal}
+            )
         intr = bal * mrate
         prin = pmt - intr
         bal = max(0.0, bal - prin)
         m_principal[i] = prin
         m_interest[i] = intr
         m_balance[i] = bal
+        m_payment[i] = pmt
 
     # ---- Month-indexed helpers ---------------------------------------------
     # 0-based year that each month falls within: months 1-12 -> year 0, etc.
@@ -352,8 +373,8 @@ def build_projection(params: dict) -> dict:
     # The chart's "other carrying costs" layer = insurance + HOA + maintenance.
     m_other_carry = m_ins_hoa + m_maintenance
 
-    # Total monthly cost of ownership = fixed P&I + tax + insurance + HOA + maint.
-    monthly_ownership_cost = pmt + m_tax + m_other_carry
+    # Total monthly cost of ownership = P&I (renews) + tax + insurance + HOA + maint.
+    monthly_ownership_cost = m_payment + m_tax + m_other_carry
 
     # ---- Rent trajectory: grows annually, applied monthly ------------------
     rent0 = float(params["rent_monthly"])
@@ -458,6 +479,7 @@ def build_projection(params: dict) -> dict:
         "cum_insurance_hoa": cum_insurance_hoa,
         "monthly_ownership_cost": monthly_ownership_cost,
         "monthly_rent": monthly_rent,
+        "renewal_schedule": renewal_schedule,   # [{month, year, rate, payment, balance}] per term
         "renter_portfolio": renter_portfolio,
         "renter_contributions": renter_contributions,
         "owner_adv_portfolio": owner_adv_portfolio,
@@ -558,6 +580,13 @@ def compute_summary(projection: dict, params: dict) -> dict:
     total_rent_paid = float(np.sum(monthly_rent))
     total_interest_paid = float(cum_interest[T])
 
+    # Mortgage payment + renewal info (the payment resets at each renewal).
+    sched = projection.get("renewal_schedule") or []
+    renewals_on = bool(params.get("renewals_enabled"))
+    mortgage_payment = float(sched[0]["payment"]) if sched else 0.0
+    renewal_payment = (float(sched[1]["payment"]) if (renewals_on and len(sched) > 1)
+                       else mortgage_payment)
+
     final_buyer_minus_renter = _buyer_nw(T) - _renter_nw(T)
 
     # Investment tax drag at term end (NOT transaction costs): pre-tax portfolio
@@ -602,6 +631,12 @@ def compute_summary(projection: dict, params: dict) -> dict:
         # ---- Transaction costs ----
         "purchase_closing_costs": purchase_costs,
         "selling_costs_final": selling_costs_final,
+        # ---- Mortgage renewals ----
+        "mortgage_payment": mortgage_payment,
+        "renewals_enabled": renewals_on,
+        "renewal_payment": renewal_payment,
+        "renewal_rate": (params.get("renewal_rate") if renewals_on else None),
+        "rate_term_years": int(params.get("rate_term_years", 5)),
     }
 
 

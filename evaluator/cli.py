@@ -109,6 +109,15 @@ def build_engine_params(args: argparse.Namespace) -> dict:
     params["cmhc"] = cmhc
     params["cmhc_premium"] = cmhc["premium"] if include_tx else 0.0
     params["purchase_closing_costs"] = base_closing + (cmhc["pst"] if include_tx else 0.0)
+
+    # ---- Mortgage rate renewals (Canadian 5-yr term) -----------------------
+    # Off by default (keeps the single-rate view). When on, --rate applies for the
+    # first term and the mortgage renews to renewal_rate (regional long-run 5yr-fixed
+    # average) for the remaining amortization.
+    params["renewals_enabled"] = bool(getattr(args, "renewals", False))
+    params["rate_term_years"] = int(getattr(args, "rate_term", None) or 5)
+    params["renewal_rate"] = _override(getattr(args, "renewal_rate", None),
+                                       region["mortgage_rate_30yr_avg"])
     return params
 
 
@@ -139,7 +148,12 @@ def print_report(params: dict, summary: dict, chart_paths: list[str]) -> None:
     lm = params.get("live_meta")
     live_note = (f"  [LIVE: {lm['source']}, as of {lm['as_of']}]"
                  if lm and abs(params["mortgage_rate"] - lm["rate"]) < 1e-9 else "")
-    print(f"  Mortgage term       : {T} years @ {params['mortgage_rate'] * 100:.2f}% fixed{live_note}")
+    fixed_lbl = "fixed (first term)" if summary.get("renewals_enabled") else "fixed"
+    print(f"  Mortgage term       : {T} years @ {params['mortgage_rate'] * 100:.2f}% {fixed_lbl}{live_note}")
+    if summary.get("renewals_enabled"):
+        print(f"  Rate renewals       : every {summary.get('rate_term_years', 5)} yrs -> "
+              f"{summary.get('renewal_rate', 0) * 100:.2f}%;  payment "
+              f"{_money(summary['mortgage_payment'], sym)}/mo -> {_money(summary['renewal_payment'], sym)}/mo")
     if params.get("show_real"):
         print(f"  Dollars shown in    : TODAY'S DOLLARS (real, deflated at "
               f"{params.get('real_inflation', 0) * 100:.1f}%/yr inflation)")
@@ -282,6 +296,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     o.add_argument("--investment-return", type=float, help="Annual investment return (decimal)")
     o.add_argument("--insurance", type=float, default=1500.0, help="Annual home insurance (default 1500)")
     o.add_argument("--hoa", type=float, default=0.0, help="Monthly HOA/condo fee (default 0)")
+
+    # Mortgage rate renewals (Canadian 5-year term).
+    m = p.add_argument_group("mortgage rate renewals (Canadian 5-yr term)")
+    m.add_argument("--renewals", action="store_true",
+                   help="Model rate renewals: --rate applies only for the first term, then the "
+                        "mortgage renews at --renewal-rate for the remaining amortization.")
+    m.add_argument("--renewal-rate", type=float,
+                   help="Rate future renewals reset to (decimal; default = regional long-run "
+                        "5yr-fixed average, ~5.5%%)")
+    m.add_argument("--rate-term", type=int, help="Years each rate is locked before renewal (default 5)")
 
     # Display: nominal (default) vs today's-dollars (real) view.
     d = p.add_argument_group("display")
