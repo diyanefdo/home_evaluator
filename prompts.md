@@ -848,3 +848,11 @@ what can i work on next then
 ## 2026-07-01 19:51:45
 
 commit and push
+
+## 2026-07-01 20:07:03
+
+have you adjusted the logic to account for inflation
+
+## 2026-07-01 20:09:46
+
+yes do that
