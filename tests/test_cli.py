@@ -58,3 +58,27 @@ class TestBuildEngineParams:
     def test_uninsurable_low_down_raises(self, make_args):
         with pytest.raises(SystemExit):
             cli.build_engine_params(make_args(price=2_000_000, down="100000"))  # 5% on >$1.5M
+
+
+class TestMonteCarloCli:
+    _BASE = ["--price", "1000000", "--down", "20%", "--years", "30", "--postal", "M2J 0E8"]
+
+    def test_monte_carlo_mode_runs_and_prints(self, capsys):
+        rc = cli.main(self._BASE + ["--monte-carlo", "150", "--mc-seed", "1", "--no-charts"])
+        out = capsys.readouterr().out
+        assert rc == 0
+        assert "MONTE CARLO SIMULATION" in out
+        assert "P(buying wins)" in out
+
+    def test_monte_carlo_bare_flag_uses_default_sims(self):
+        # `--monte-carlo` with no value should fall back to the default sim count.
+        args = cli.build_arg_parser().parse_args(self._BASE + ["--monte-carlo"])
+        assert args.monte_carlo == cli.projections.DEFAULT_MC_SIMS
+
+    def test_no_flag_leaves_monte_carlo_none(self):
+        args = cli.build_arg_parser().parse_args(self._BASE)
+        assert args.monte_carlo is None
+
+    def test_signed_money_tags_leader(self):
+        assert "buyer" in cli._signed_money(1000.0)
+        assert "renter" in cli._signed_money(-1000.0)

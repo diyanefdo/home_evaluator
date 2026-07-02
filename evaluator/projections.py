@@ -171,7 +171,7 @@ def _invest_with_accounts(
     initial_lump: float,
     monthly_contrib: np.ndarray,
     n: int,
-    mrate_inv: float,
+    mrate_inv,   # scalar monthly return, or a per-month array of length n
     *,
     strategy: str,
     tfsa_room0: float,
@@ -215,6 +215,10 @@ def _invest_with_accounts(
         state["taxable"] += amount
         state["basis"] += amount
 
+    # Accept a constant monthly return or a per-month path (Monte Carlo).
+    mrate_arr = (np.full(n, float(mrate_inv)) if np.isscalar(mrate_inv)
+                 else np.asarray(mrate_inv, dtype=float))
+
     contribute(initial_lump)
     snap_t = [state["tfsa"]]
     snap_r = [state["rrsp"]]
@@ -224,9 +228,10 @@ def _invest_with_accounts(
 
     for i in range(n):
         # Growth first (matches the original bal*(1+r)+contrib convention).
-        state["tfsa"] *= 1 + mrate_inv
-        state["rrsp"] *= 1 + mrate_inv
-        state["taxable"] *= 1 + mrate_inv
+        r = mrate_arr[i]
+        state["tfsa"] *= 1 + r
+        state["rrsp"] *= 1 + r
+        state["taxable"] *= 1 + r
         # New calendar year: inject last year's reinvested RRSP refund.
         if i % 12 == 0 and pending_refund:
             contribute(pending_refund)
@@ -300,9 +305,20 @@ def build_projection(params: dict) -> dict:
 
     annual_rate = float(params["mortgage_rate"])
     appr = float(params["appreciation_rate"])
-
     invest = float(params["investment_return_rate"])
-    mrate_inv = (1 + invest) ** (1 / 12) - 1
+
+    # Optional per-year rate PATHS (Monte Carlo). Each is an annual array of length
+    # T; when absent, the scalar rate is used every year (the deterministic default,
+    # so nothing changes for a normal run).
+    appr_path = params.get("appreciation_path")
+    appr_annual = (np.full(T, appr, dtype=float) if appr_path is None
+                   else np.asarray(appr_path, dtype=float))
+    ret_path = params.get("investment_return_path")
+    ret_annual = (np.full(T, invest, dtype=float) if ret_path is None
+                  else np.asarray(ret_path, dtype=float))
+    # Per-month investment return from the annual path (index each month into its year).
+    month_year_idx = np.minimum(np.arange(n) // 12, T - 1)
+    mrate_inv = (1.0 + ret_annual[month_year_idx]) ** (1.0 / 12.0) - 1.0
 
     # ---- Amortization with 5-year rate renewals (Canadian style) ------------
     # A Canadian mortgage locks its rate for a TERM (default 5 yrs), not the whole
@@ -348,10 +364,10 @@ def build_projection(params: dict) -> dict:
     # 0-based year that each month falls within: months 1-12 -> year 0, etc.
     year_of_month = (months - 1) // 12
 
-    # Month's appreciated home value. Smooth monthly compounding off the purchase
-    # price so maintenance grows month-by-month rather than stepping once a year.
-    # Index 0 (first month) == purchase price; it then drifts up each month.
-    month_home_value = price * (1 + appr) ** (np.arange(n) / 12.0)
+    # Month's appreciated home value. Smooth monthly compounding along the (possibly
+    # per-year) appreciation path; index 0 (first month) == purchase price.
+    monthly_appr_factor = (1.0 + appr_annual[month_year_idx]) ** (1.0 / 12.0)
+    month_home_value = price * np.concatenate(([1.0], np.cumprod(monthly_appr_factor)[:-1]))
 
     # ---- Monthly ownership-cost components ---------------------------------
     # Property tax: annual bill grows each year, charged monthly.
@@ -382,7 +398,7 @@ def build_projection(params: dict) -> dict:
     monthly_rent = rent0 * (1 + rent_growth) ** year_of_month
 
     # ---- Annual home value / loan balance / equity -------------------------
-    home_value = price * (1 + appr) ** years
+    home_value = price * np.concatenate(([1.0], np.cumprod(1.0 + appr_annual)))
     loan_balance = np.concatenate(([loan0], m_balance[11::12]))
     equity = home_value - loan_balance
 
@@ -679,6 +695,92 @@ def build_sensitivity(
         "base_appreciation": float(params.get("appreciation_rate", float("nan"))),
         "base_return": float(params.get("investment_return_rate", float("nan"))),
         "after_tax": True,  # the tax layer always runs in build_projection
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Monte Carlo: randomize the two dominant drivers (home appreciation + investment
+# return) year by year and re-run the real engine, so we can report how OFTEN
+# buying wins and the spread of outcomes -- not just a single point estimate.
+# --------------------------------------------------------------------------- #
+DEFAULT_MC_SIMS = 1000
+DEFAULT_APPR_VOL = 0.07        # annual home-price volatility (std dev)
+DEFAULT_RETURN_VOL = 0.16      # annual equity (S&P 500) volatility
+DEFAULT_APPR_RETURN_CORR = 0.2  # mild positive correlation between the two
+
+
+def run_monte_carlo(
+    params: dict,
+    *,
+    n_sims: int = DEFAULT_MC_SIMS,
+    appr_vol: float = DEFAULT_APPR_VOL,
+    return_vol: float = DEFAULT_RETURN_VOL,
+    correlation: float = DEFAULT_APPR_RETURN_CORR,
+    seed: int | None = None,
+) -> dict:
+    """Simulate ``n_sims`` outcomes with random year-by-year appreciation + returns.
+
+    Each year's home appreciation and investment return are drawn from correlated
+    normals centred on the scenario's own assumptions (means) with the given annual
+    volatilities, then the REAL projection engine is run on that path — so this
+    captures sequence-of-returns risk and stays consistent with the deterministic
+    model (whose result sits near the median). All other assumptions (rent, tax,
+    transaction costs, renewals) are held at their scenario values.
+
+    Returns P(buying wins), percentile bands of both net-worth paths over time, and
+    the distribution of the year-T gap. Runs in nominal dollars — P(buy wins) is
+    unaffected by inflation deflation (both sides scale together).
+    """
+    T = int(params["term_years"])
+    n_sims = max(1, int(n_sims))
+    appr_mean = float(params["appreciation_rate"])
+    ret_mean = float(params["investment_return_rate"])
+
+    rng = np.random.default_rng(seed)
+    corr = float(np.clip(correlation, -0.95, 0.95))
+    chol = np.linalg.cholesky([[1.0, corr], [corr, 1.0]])
+    z = rng.standard_normal((n_sims, T, 2)) @ chol.T
+    # Clip to sane annual bounds (no <-100% returns, no runaway years).
+    appr_paths = np.clip(appr_mean + appr_vol * z[:, :, 0], -0.30, 0.40)
+    ret_paths = np.clip(ret_mean + return_vol * z[:, :, 1], -0.60, 0.80)
+
+    buyer_series = np.empty((n_sims, T + 1))
+    renter_series = np.empty((n_sims, T + 1))
+    base = dict(params)
+    for k in range(n_sims):
+        p = dict(base)
+        p["appreciation_path"] = appr_paths[k]
+        p["investment_return_path"] = ret_paths[k]
+        proj = build_projection(p)
+        buyer_series[k] = proj["buyer_net_worth_after_tax"]
+        renter_series[k] = proj["renter_net_worth_after_tax"]
+
+    gaps = buyer_series[:, -1] - renter_series[:, -1]
+
+    def _bands(mat: np.ndarray) -> dict:
+        return {
+            "p10": np.percentile(mat, 10, axis=0).tolist(),
+            "p50": np.percentile(mat, 50, axis=0).tolist(),
+            "p90": np.percentile(mat, 90, axis=0).tolist(),
+        }
+
+    return {
+        "n_sims": n_sims,
+        "p_buy_wins": float(np.mean(gaps > 0)),
+        "gap_mean": float(np.mean(gaps)),
+        "gap_p10": float(np.percentile(gaps, 10)),
+        "gap_p50": float(np.percentile(gaps, 50)),
+        "gap_p90": float(np.percentile(gaps, 90)),
+        "buyer_final_p50": float(np.percentile(buyer_series[:, -1], 50)),
+        "renter_final_p50": float(np.percentile(renter_series[:, -1], 50)),
+        "years": list(range(T + 1)),
+        "buyer_bands": _bands(buyer_series),
+        "renter_bands": _bands(renter_series),
+        "gaps": gaps.tolist(),
+        "assumptions": {
+            "appr_mean": appr_mean, "return_mean": ret_mean,
+            "appr_vol": appr_vol, "return_vol": return_vol, "correlation": corr,
+        },
     }
 
 

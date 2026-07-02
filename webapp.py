@@ -398,6 +398,29 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
  .charts{transition:opacity .2s}
  .charts.loading{opacity:.45}
 
+ /* Monte Carlo panel */
+ .montecarlo{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+   padding:1.1rem 1.2rem;box-shadow:var(--shadow);margin:1.1rem 0}
+ .mc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap}
+ .montecarlo h2{font-size:1.05rem;margin:0 0 .15rem}
+ .mc-actions{display:flex;align-items:center;gap:.7rem;flex-shrink:0}
+ .mc-btn{margin-top:0;background:var(--brand);color:#fff;border:0;border-radius:10px;
+   padding:.6rem 1.1rem;font-weight:700;font-size:.9rem;cursor:pointer;box-shadow:none;
+   white-space:nowrap}
+ .mc-btn:hover{filter:brightness(1.06)}
+ .mc-btn:disabled{opacity:.6;cursor:progress}
+ #mc-status{font-size:.8rem;color:var(--muted);font-weight:500}
+ .mc-out{margin-top:1rem;padding-top:1rem;border-top:1px solid var(--line)}
+ .mc-prob-card{display:flex;flex-direction:column;align-items:center;text-align:center;
+   background:linear-gradient(135deg,#eef5ff,#f7fbff);border:1px solid var(--line);
+   border-radius:14px;padding:1rem;margin-bottom:1rem}
+ .mc-prob{font-size:2.6rem;font-weight:800;color:var(--brand);line-height:1}
+ .mc-prob-cap{color:var(--muted);font-size:.86rem;margin-top:.35rem;max-width:52ch}
+ .mc-gap{margin-top:.6rem;font-size:.92rem}
+ .mc-gap b{color:var(--ink)}
+ .mc-fig{margin:1rem 0 0}
+ .mc-fig figcaption{color:var(--muted);font-size:.82rem;margin-bottom:.3rem}
+
  /* staggered entrance for results blocks */
  .reveal{opacity:0;animation:rise .6s cubic-bezier(.16,.84,.44,1) both}
  .result-banner.reveal{animation-delay:.04s}
@@ -669,6 +692,82 @@ if(wfRenewRate) wfRenewRate.addEventListener('input', function(){
 });
 wfLabels();
 wfDollarsNote(); wfRenewNote();
+"""
+
+# Monte Carlo: on demand, fetch /api/montecarlo (which randomizes appreciation +
+# investment return year by year) and draw a fan chart of both net-worth paths
+# plus a histogram of the year-T gap. Reads the live slider state so it simulates
+# whatever the user is currently looking at.
+MONTECARLO_SCRIPT_BODY = """
+function mcMoney(v){var a=Math.abs(+v);var s=v<0?'-':'';
+  if(a>=1e6) return s+'$'+(a/1e6).toFixed(2)+'M';
+  if(a>=1e3) return s+'$'+(a/1e3).toFixed(0)+'k';
+  return s+'$'+a.toFixed(0);}
+function mcQuery(){
+  var q=new URLSearchParams(BASE);
+  var g=function(id){var e=document.getElementById(id);return e?e.value:null;};
+  if(g('s-down')!=null) q.set('down', g('s-down')+'%');
+  if(g('s-rate')!=null) q.set('rate', g('s-rate')/100);
+  if(g('s-appr')!=null) q.set('appreciation', g('s-appr')/100);
+  if(g('s-ret')!=null) q.set('investment_return', g('s-ret')/100);
+  if(g('s-rent')!=null) q.set('rent', g('s-rent'));
+  var rn=document.getElementById('wf-renew');
+  if(rn&&rn.checked){q.set('renewals','true');
+    var rr=document.getElementById('wf-renew-rate'); if(rr) q.set('renewal_rate', rr.value/100);}
+  return q;
+}
+function mcBand(years,bands,color,name){
+  var up={x:years,y:bands.p90,mode:'lines',line:{width:0},name:name+' p90',
+    hoverinfo:'skip',showlegend:false};
+  var lo={x:years,y:bands.p10,mode:'lines',line:{width:0},fill:'tonexty',
+    fillcolor:color.replace('RGB','rgba').replace(')',',0.18)'),name:name+' 10-90%',
+    hoverinfo:'skip',showlegend:false};
+  var mid={x:years,y:bands.p50,mode:'lines',line:{color:color,width:2.5},name:name+' median'};
+  return [up,lo,mid];
+}
+function mcRender(d){
+  var box=document.getElementById('mc-out'); if(!box) return;
+  var pct=(d.p_buy_wins*100).toFixed(0);
+  var lead=d.p_buy_wins>=0.5?'Buying':'Renting';
+  document.getElementById('mc-prob').textContent=pct+'%';
+  document.getElementById('mc-prob-cap').textContent=
+    'chance buying ends ahead \\u2014 '+lead+' wins in the majority of '+d.n_sims.toLocaleString()+' simulated futures';
+  document.getElementById('mc-gap').innerHTML=
+    '10th pct <b>'+mcMoney(d.gap_p10)+'</b> &middot; median <b>'+mcMoney(d.gap_p50)+
+    '</b> &middot; 90th pct <b>'+mcMoney(d.gap_p90)+'</b> <small>(buyer &minus; renter, yr '+
+    (d.years[d.years.length-1])+')</small>';
+  box.style.display='';
+  if(typeof Plotly==='undefined') return;
+  var buyer=mcBand(d.years,d.buyer_bands,'rgb(37,99,235)','Buyer');
+  var renter=mcBand(d.years,d.renter_bands,'rgb(217,119,6)','Renter');
+  Plotly.react('mc-fan', buyer.concat(renter), {
+    margin:{l:56,r:12,t:10,b:36}, hovermode:'x unified',
+    xaxis:{title:'Year'}, yaxis:{title:'Net worth', tickprefix:'$', tickformat:'~s'},
+    legend:{orientation:'h',y:-0.18}, paper_bgcolor:'rgba(0,0,0,0)',
+    plot_bgcolor:'rgba(0,0,0,0)'
+  }, {displayModeBar:false, responsive:true});
+  Plotly.react('mc-hist', [{
+    x:d.gaps, type:'histogram', nbinsx:40,
+    marker:{color:'rgba(37,99,235,0.55)'}, name:'gap'
+  }], {
+    margin:{l:48,r:12,t:10,b:36}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+    xaxis:{title:'Year-end gap (buyer \\u2212 renter)', tickprefix:'$', tickformat:'~s',
+      zeroline:true, zerolinecolor:'#94a3b8', zerolinewidth:2},
+    yaxis:{title:'# of simulations'}, bargap:0.02
+  }, {displayModeBar:false, responsive:true});
+}
+function runMonteCarlo(){
+  var btn=document.getElementById('mc-btn'); var st=document.getElementById('mc-status');
+  if(btn) btn.disabled=true; if(st) st.textContent='Simulating\\u2026';
+  fetch('/api/montecarlo?'+mcQuery().toString()).then(function(r){return r.json();}).then(function(d){
+    if(btn) btn.disabled=false;
+    if(!d.ok){if(st) st.textContent=(d.error||'Could not simulate'); return;}
+    if(st) st.textContent='Ran '+d.n_sims.toLocaleString()+' random paths';
+    mcRender(d);
+  }).catch(function(){if(btn) btn.disabled=false; if(st) st.textContent='Could not simulate';});
+}
+var mcBtn=document.getElementById('mc-btn');
+if(mcBtn) mcBtn.addEventListener('click', runMonteCarlo);
 """
 
 # Save + share behaviour. RESULT_INPUTS (+ SCEN_ID) are injected per result;
@@ -1361,15 +1460,29 @@ def _methodology_html() -> str:
         + 'everything to present-day purchasing power (default 2%/yr inflation). It never changes '
         + 'the verdict &mdash; both sides are deflated by the same factor &mdash; it just makes the '
         + 'magnitudes intuitive.</li>'
+        + '<li>The charts use one steady rate per assumption; <b>&ldquo;Run simulation&rdquo;</b> '
+        + '(Monte Carlo) instead draws hundreds of futures with appreciation and returns that vary '
+        + 'year to year, reporting how often buying wins and the range of outcomes.</li>'
         + '</ul>'
+
+        + '<h2>Testing how sure the verdict is (Monte Carlo)</h2>'
+        + '<p>The headline verdict is a single most-likely path. The <b>Monte Carlo</b> panel on '
+        + 'the results page stress-tests it: it runs the full model hundreds of times, each with '
+        + 'home appreciation and investment returns drawn randomly (and mildly correlated) around '
+        + 'their averages, varying <em>year by year</em> so the order of good and bad years matters '
+        + '(sequence-of-returns risk). The result is a <b>probability that buying ends ahead</b>, a '
+        + 'net-worth fan chart (10th&ndash;90th percentile band around the median), and a histogram '
+        + 'of the final gap. A band that straddles $0 means the verdict is genuinely uncertain. '
+        + 'Because both paths scale together, that probability is unaffected by the today&rsquo;s-'
+        + 'dollars toggle.</p>'
 
         + '<h2>What it deliberately leaves out</h2>'
         + '<ul>'
         + '<li><b>Horizon:</b> the comparison runs to the end of the mortgage term. A renter '
         + 'could of course buy later; net worth at the term end is a complete snapshot, so '
         + 'terminal value / imputed rent beyond the term is out of scope.</li>'
-        + '<li>Volatility and sequence-of-returns risk (a single average return is used; the '
-        + 'sensitivity heatmap shows how the verdict shifts across assumptions).</li>'
+        + '<li>The charts themselves use a single average return; volatility and sequence-of-returns '
+        + 'risk are explored separately by the sensitivity heatmap and the Monte Carlo panel.</li>'
         + '<li>Lifestyle factors, mobility, maintenance effort, and non-financial value.</li>'
         + '<li>Per-city Teranet index reads for the non-Ontario provinces (appreciation there is a '
         + 'forward-sustainable estimate; the LTT, property-tax, benchmark, and rent figures are grounded).</li>'
@@ -1919,6 +2032,39 @@ def _render_result_html(sc: dict, inputs: dict, *, user: dict | None = None,
         '</section>'
     )
 
+    montecarlo = (
+        '<section class="montecarlo" id="montecarlo">'
+        '<div class="mc-head">'
+        '<div>'
+        '<h2>Monte Carlo &middot; how sure is this verdict?</h2>'
+        '<p class="wf-sub">The charts above assume one steady rate of return. '
+        'Real markets wobble. This runs hundreds of random futures &mdash; each with '
+        'appreciation and investment returns that vary year to year &mdash; and counts '
+        'how often buying comes out ahead.</p>'
+        '</div>'
+        '<div class="mc-actions">'
+        '<button type="button" id="mc-btn" class="mc-btn">Run simulation</button>'
+        '<span class="save-status" id="mc-status"></span>'
+        '</div>'
+        '</div>'
+        '<div class="mc-out" id="mc-out" style="display:none">'
+        '<div class="mc-prob-card">'
+        '<span class="mc-prob" id="mc-prob">&mdash;</span>'
+        '<span class="mc-prob-cap" id="mc-prob-cap"></span>'
+        '<span class="mc-gap" id="mc-gap"></span>'
+        '</div>'
+        '<figure class="mc-fig">'
+        '<figcaption>Net worth across random futures (shaded = 10th&ndash;90th percentile, line = median)</figcaption>'
+        '<div id="mc-fan" class="plot" style="height:360px"></div>'
+        '</figure>'
+        '<figure class="mc-fig">'
+        '<figcaption>Distribution of the final net-worth gap &mdash; bars right of $0 are futures where buying wins</figcaption>'
+        '<div id="mc-hist" class="plot" style="height:280px"></div>'
+        '</figure>'
+        '</div>'
+        '</section>'
+    )
+
     base_js = json.dumps({
         "price": inputs["price"], "years": sc["years"], "postal": inputs.get("postal", "M2J 0E8"),
         "age": inputs.get("age", 35), "income": inputs.get("income", 120000.0),
@@ -1970,6 +2116,7 @@ def _render_result_html(sc: dict, inputs: dict, *, user: dict | None = None,
         "var BASE=" + base_js + ";\n"
         + CHARTS_SCRIPT_BODY + "\n"
         + WHATIF_SCRIPT_BODY + "\n"
+        + MONTECARLO_SCRIPT_BODY + "\n"
         + result_script + "</script>"
     )
 
@@ -1982,6 +2129,7 @@ def _render_result_html(sc: dict, inputs: dict, *, user: dict | None = None,
         + stats
         + whatif
         + imgs
+        + montecarlo
         + '<p><a class="back" href="/">&larr; Run another scenario</a> '
         + '&middot; <a class="back" href="/methodology">How this works</a></p>'
         + script
@@ -2117,4 +2265,77 @@ def recompute(
         "gap_str": f["gap_str"],
         "by_str": f["by_str"],
         "stats": f["stats"],
+    })
+
+
+# How many random paths the web "Run Monte Carlo" button simulates. Kept modest
+# so the request returns in well under a second even on a small instance.
+_WEB_MC_SIMS = 800
+
+
+@app.get("/api/montecarlo")
+def api_montecarlo(
+    price: float,
+    down: str = "20%",
+    years: int = 30,
+    postal: str = "M2J 0E8",
+    age: int = 35,
+    income: float = 120000.0,
+    strategy: str = "shelter-first",
+    first_time: bool = False,
+    rate: float | None = None,
+    appreciation: float | None = None,
+    rent: float | None = None,
+    investment_return: float | None = None,
+    renewals: bool = False,
+    renewal_rate: float | None = None,
+    sims: int = _WEB_MC_SIMS,
+    _: None = Depends(require_auth),
+) -> JSONResponse:
+    """Run a Monte Carlo simulation and return P(buy wins) + percentile bands.
+
+    Randomizes year-by-year appreciation and investment return around the
+    scenario's own means, runs the real engine per path, and returns the bands
+    the results page draws as a fan chart plus a histogram of the year-T gap.
+    Runs in nominal dollars (P(buy wins) is inflation-invariant).
+    """
+    try:
+        if not (0 < price <= MAX_PRICE):
+            raise ValueError(f"Price must be between $1 and ${MAX_PRICE:,.0f}.")
+        if not (1 <= years <= MAX_YEARS):
+            raise ValueError(f"Mortgage term must be between 1 and {MAX_YEARS} years.")
+        args = argparse.Namespace(
+            price=price, down=down, years=years, postal=postal,
+            age=age, income=income, account_strategy=strategy, retirement_rate=None,
+            first_time_buyer=first_time, commission_rate=None, purchase_legal=None,
+            no_transaction_costs=False, live=_LIVE_DATA,
+            rate=rate, appreciation=appreciation, rent=rent, rent_growth=None,
+            property_tax_rate=None, investment_return=investment_return,
+            insurance=1500.0, hoa=0.0, out=None, no_charts=False,
+            renewals=renewals, renewal_rate=renewal_rate, rate_term=None,
+        )
+        params = cli.build_engine_params(args)
+        n = max(100, min(int(sims), 3000))
+        mc = projections.run_monte_carlo(params, n_sims=n)
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    except Exception as exc:  # noqa: BLE001 - surface modelling errors
+        return JSONResponse({"ok": False, "error": f"Could not simulate: {exc}"},
+                            status_code=400)
+
+    sym = params["currency_symbol"]
+    return JSONResponse({
+        "ok": True,
+        "sym": sym,
+        "n_sims": mc["n_sims"],
+        "p_buy_wins": mc["p_buy_wins"],
+        "gap_p10": mc["gap_p10"], "gap_p50": mc["gap_p50"], "gap_p90": mc["gap_p90"],
+        "gap_mean": mc["gap_mean"],
+        "buyer_final_p50": mc["buyer_final_p50"],
+        "renter_final_p50": mc["renter_final_p50"],
+        "years": mc["years"],
+        "buyer_bands": mc["buyer_bands"],
+        "renter_bands": mc["renter_bands"],
+        "gaps": mc["gaps"],
+        "assumptions": mc["assumptions"],
     })

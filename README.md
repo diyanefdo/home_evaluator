@@ -99,6 +99,23 @@ transform — year-T balances divide by `(1+i)^T`, cumulative costs deflate each
 flow by that year — so it **never changes the verdict** (both sides are deflated
 identically); it just makes the magnitudes intuitive ("$6M in 2056 ≈ $3.3M today").
 
+### Monte Carlo simulation
+
+The single-path charts assume one steady rate of appreciation and one steady
+investment return. Real markets vary year to year, and *when* good and bad years
+land matters (sequence-of-returns risk). `--monte-carlo [N]` (CLI) or the **"Run
+simulation"** button (web) draws `N` random futures (default 1,000 / 800), each
+with **year-by-year appreciation and investment return** sampled from correlated
+normals centred on the scenario's own means, then runs the **real projection
+engine** on every path. It reports **P(buying wins)** plus the 10th/50th/90th
+percentile of the year-T net-worth gap; the web view adds a net-worth **fan chart**
+(10–90% band + median) and a **histogram** of the final gap (bars right of $0 are
+futures where buying wins). Because both sides scale together, P(buy wins) is
+inflation-invariant. Tune with `--mc-appr-vol` (default 0.07), `--mc-return-vol`
+(0.16), `--mc-correlation` (0.2), and `--mc-seed` for reproducibility. Volatility
+drag means the median MC outcome is typically a bit less extreme than the
+deterministic point estimate — a real effect the simulation surfaces.
+
 ### Regional coverage & live data
 
 Postal-code routing (most specific first): North York FSAs (`M2H/M2J/M2K/M2N`)

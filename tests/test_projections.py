@@ -156,6 +156,51 @@ class TestRenewals:
         assert len(proj["renewal_schedule"]) == 3
 
 
+class TestMonteCarlo:
+    def _params(self, make_args, **over):
+        p = cli.build_engine_params(make_args())
+        p.update(over)
+        return p
+
+    def test_deterministic_with_seed(self, make_args):
+        p = self._params(make_args)
+        a = projections.run_monte_carlo(p, n_sims=200, seed=7)
+        b = projections.run_monte_carlo(p, n_sims=200, seed=7)
+        assert a["p_buy_wins"] == b["p_buy_wins"]
+        assert a["gap_p50"] == pytest.approx(b["gap_p50"])
+
+    def test_probability_in_unit_interval(self, make_args):
+        mc = projections.run_monte_carlo(self._params(make_args), n_sims=200, seed=1)
+        assert 0.0 <= mc["p_buy_wins"] <= 1.0
+
+    def test_percentile_bands_ordered(self, make_args):
+        mc = projections.run_monte_carlo(self._params(make_args), n_sims=300, seed=3)
+        assert mc["gap_p10"] <= mc["gap_p50"] <= mc["gap_p90"]
+        assert mc["buyer_bands"]["p10"][-1] <= mc["buyer_bands"]["p90"][-1]
+        assert len(mc["buyer_bands"]["p50"]) == mc["years"][-1] + 1
+
+    def test_higher_appreciation_raises_win_probability(self, make_args):
+        low = projections.run_monte_carlo(self._params(make_args, appreciation_rate=0.03),
+                                          n_sims=400, seed=5)
+        high = projections.run_monte_carlo(self._params(make_args, appreciation_rate=0.08),
+                                           n_sims=400, seed=5)
+        assert high["p_buy_wins"] > low["p_buy_wins"]
+
+    def test_zero_volatility_matches_deterministic(self, make_args):
+        # With no volatility every path is the deterministic run, so the median gap
+        # equals the point estimate and P(buy) collapses to 0 or 1.
+        p = self._params(make_args)
+        det = projections.compute_summary(projections.build_projection(p), p)["final_buyer_minus_renter"]
+        mc = projections.run_monte_carlo(p, n_sims=50, appr_vol=0.0, return_vol=0.0, seed=0)
+        assert mc["gap_p50"] == pytest.approx(det, rel=1e-6)
+        assert mc["p_buy_wins"] in (0.0, 1.0)
+
+    def test_sim_count_respected(self, make_args):
+        mc = projections.run_monte_carlo(self._params(make_args), n_sims=123, seed=2)
+        assert mc["n_sims"] == 123
+        assert len(mc["gaps"]) == 123
+
+
 class TestCashFlowMatching:
     def test_larger_down_payment_reduces_interest(self, make_args):
         small = cli.build_engine_params(make_args(down="200000"))

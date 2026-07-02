@@ -239,6 +239,50 @@ def print_report(params: dict, summary: dict, chart_paths: list[str]) -> None:
     print("  financial advice. Past returns do not guarantee future results.")
 
 
+def print_monte_carlo(params: dict, mc: dict) -> None:
+    sym = params["currency_symbol"]
+    T = params["term_years"]
+    a = mc["assumptions"]
+    line = "=" * 64
+    print(line)
+    print("  MONTE CARLO SIMULATION")
+    print(line)
+    print(f"  Postal code        : {params['postal_code']}  ({params['region_label']})")
+    print(f"  House price         : {_money(params['purchase_price'], sym)}   "
+          f"Down {_money(params['down_payment'], sym)}   Term {T} yr")
+    print(f"  Paths simulated     : {mc['n_sims']:,}")
+    print(f"  Appreciation        : {a['appr_mean'] * 100:.2f}%/yr mean, "
+          f"{a['appr_vol'] * 100:.1f}% vol")
+    print(f"  Investment return   : {a['return_mean'] * 100:.2f}%/yr mean, "
+          f"{a['return_vol'] * 100:.1f}% vol  (corr {a['correlation']:+.2f})")
+    print(line)
+    p_buy = mc["p_buy_wins"]
+    verdict = "BUYING" if p_buy >= 0.5 else "RENTING"
+    print(f"  P(buying wins)      : {p_buy * 100:.1f}%   "
+          f"-> {verdict} wins in more than half of simulated futures")
+    print()
+    print(f"  Year-{T} net-worth gap (buyer - renter), across paths:")
+    print(f"    10th percentile   : {_signed_money(mc['gap_p10'], sym)}")
+    print(f"    median (p50)      : {_signed_money(mc['gap_p50'], sym)}")
+    print(f"    mean              : {_signed_money(mc['gap_mean'], sym)}")
+    print(f"    90th percentile   : {_signed_money(mc['gap_p90'], sym)}")
+    print()
+    print(f"  Buyer  net worth @ yr {T} (median) : {_money(mc['buyer_final_p50'], sym)}")
+    print(f"  Renter net worth @ yr {T} (median) : {_money(mc['renter_final_p50'], sym)}")
+    print(line)
+    print("  A gap band that straddles zero means the verdict is genuinely")
+    print("  uncertain: the outcome depends on which future actually plays out.")
+    print(line)
+    print("  Note: Monte Carlo randomizes only appreciation + investment return.")
+    print("  It is not financial advice; past volatility need not repeat.")
+
+
+def _signed_money(value: float, symbol: str = "$") -> str:
+    """Money with an explicit sign and a buyer/renter tag for gap figures."""
+    who = "buyer" if value >= 0 else "renter"
+    return f"{_money(abs(value), symbol)} ({who})"
+
+
 # --------------------------------------------------------------------------- #
 # Entry point
 # --------------------------------------------------------------------------- #
@@ -307,6 +351,22 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         "5yr-fixed average, ~5.5%%)")
     m.add_argument("--rate-term", type=int, help="Years each rate is locked before renewal (default 5)")
 
+    # Monte Carlo: randomized year-by-year appreciation + returns.
+    mc = p.add_argument_group("monte carlo (randomized paths)")
+    mc.add_argument("--monte-carlo", dest="monte_carlo", type=int, nargs="?",
+                    const=projections.DEFAULT_MC_SIMS, default=None,
+                    help="Run a Monte Carlo simulation with N random paths "
+                         f"(default {projections.DEFAULT_MC_SIMS}) and report P(buying wins) "
+                         "plus percentile bands instead of the single-path report.")
+    mc.add_argument("--mc-appr-vol", type=float, default=projections.DEFAULT_APPR_VOL,
+                    help=f"Annual home-price volatility (std dev, default {projections.DEFAULT_APPR_VOL})")
+    mc.add_argument("--mc-return-vol", type=float, default=projections.DEFAULT_RETURN_VOL,
+                    help=f"Annual investment-return volatility (default {projections.DEFAULT_RETURN_VOL})")
+    mc.add_argument("--mc-correlation", type=float, default=projections.DEFAULT_APPR_RETURN_CORR,
+                    help=f"Appreciation/return correlation (default {projections.DEFAULT_APPR_RETURN_CORR})")
+    mc.add_argument("--mc-seed", type=int, default=None,
+                    help="Random seed for reproducible Monte Carlo runs")
+
     # Display: nominal (default) vs today's-dollars (real) view.
     d = p.add_argument_group("display")
     d.add_argument("--real", action="store_true",
@@ -320,6 +380,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     params = build_engine_params(args)
+
+    # Monte Carlo mode replaces the single-path report with a distribution.
+    if getattr(args, "monte_carlo", None) is not None:
+        mc = projections.run_monte_carlo(
+            params,
+            n_sims=int(args.monte_carlo),
+            appr_vol=float(args.mc_appr_vol),
+            return_vol=float(args.mc_return_vol),
+            correlation=float(args.mc_correlation),
+            seed=args.mc_seed,
+        )
+        print_monte_carlo(params, mc)
+        return 0
 
     projection = projections.build_projection(params)
     if not args.no_charts and not getattr(args, "no_sensitivity", False):
