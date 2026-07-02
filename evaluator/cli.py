@@ -140,6 +140,9 @@ def print_report(params: dict, summary: dict, chart_paths: list[str]) -> None:
     live_note = (f"  [LIVE: {lm['source']}, as of {lm['as_of']}]"
                  if lm and abs(params["mortgage_rate"] - lm["rate"]) < 1e-9 else "")
     print(f"  Mortgage term       : {T} years @ {params['mortgage_rate'] * 100:.2f}% fixed{live_note}")
+    if params.get("show_real"):
+        print(f"  Dollars shown in    : TODAY'S DOLLARS (real, deflated at "
+              f"{params.get('real_inflation', 0) * 100:.1f}%/yr inflation)")
     print()
     print("  ASSUMPTIONS (regional, unless overridden):")
     print(f"    Home appreciation : {params['appreciation_rate'] * 100:.2f}%/yr")
@@ -279,6 +282,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     o.add_argument("--investment-return", type=float, help="Annual investment return (decimal)")
     o.add_argument("--insurance", type=float, default=1500.0, help="Annual home insurance (default 1500)")
     o.add_argument("--hoa", type=float, default=0.0, help="Monthly HOA/condo fee (default 0)")
+
+    # Display: nominal (default) vs today's-dollars (real) view.
+    d = p.add_argument_group("display")
+    d.add_argument("--real", action="store_true",
+                   help="Show all dollar figures in today's dollars (inflation-adjusted). "
+                        "Does not change the verdict; only rescales magnitudes.")
+    d.add_argument("--inflation", type=float,
+                   help="Annual inflation for the --real view (decimal, default 0.02)")
     return p
 
 
@@ -287,12 +298,21 @@ def main(argv: list[str] | None = None) -> int:
     params = build_engine_params(args)
 
     projection = projections.build_projection(params)
+    if not args.no_charts and not getattr(args, "no_sensitivity", False):
+        projection["sensitivity"] = projections.build_sensitivity(params)
+
+    # Optional today's-dollars view: deflate the (nominal) projection in place, so
+    # the summary + charts render in real dollars. Verdict is unaffected.
+    if getattr(args, "real", False):
+        inflation = _override(getattr(args, "inflation", None), projections.DEFAULT_INFLATION)
+        projection = projections.deflate_projection(projection, inflation)
+        params["show_real"] = True
+        params["real_inflation"] = inflation
+
     summary = projections.compute_summary(projection, params)
 
     chart_paths: list[str] = []
     if not args.no_charts:
-        if not getattr(args, "no_sensitivity", False):
-            projection["sensitivity"] = projections.build_sensitivity(params)
         chart_paths = charts.generate_charts(projection, params, args.out)
 
     print_report(params, summary, chart_paths)

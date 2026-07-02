@@ -79,6 +79,15 @@ Every regional assumption can be overridden from the CLI (see `--help`):
 `--rate`, `--appreciation`, `--rent`, `--rent-growth`, `--property-tax-rate`,
 `--investment-return`, `--insurance`, `--hoa`.
 
+### Today's-dollars (real) view
+
+By default all figures are **nominal** (future dollars). Add `--real` (CLI) or tick
+**"Show in today's dollars"** in the web what-if panel to deflate every dollar to
+present-day purchasing power at `--inflation` (default 2%/yr). This is a pure display
+transform — year-T balances divide by `(1+i)^T`, cumulative costs deflate each year's
+flow by that year — so it **never changes the verdict** (both sides are deflated
+identically); it just makes the magnitudes intuitive ("$6M in 2056 ≈ $3.3M today").
+
 ### Regional coverage & live data
 
 Postal-code routing (most specific first): North York FSAs (`M2H/M2J/M2K/M2N`)

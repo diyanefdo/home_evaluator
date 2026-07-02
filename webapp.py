@@ -387,6 +387,14 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
  #wf-status{margin-left:.6rem;font-size:.8rem;color:var(--muted);font-weight:500;
    opacity:0;transition:opacity .15s}
  #wf-status.on{opacity:1}
+ .wf-real{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-top:1rem;
+   padding-top:.9rem;border-top:1px solid var(--line);font-size:.88rem}
+ .wf-real label{font-weight:600;display:flex;align-items:center;gap:.4rem;cursor:pointer}
+ .wf-real input[type=checkbox]{width:1rem;height:1rem;accent-color:var(--brand);cursor:pointer}
+ .wf-real input[type=number]{width:3.4rem;padding:.2rem .35rem;border:1px solid #cfd9e4;
+   border-radius:7px;font-size:.85rem}
+ .wf-real-infl{color:var(--muted)}
+ .wf-dollars-note{color:var(--brand);font-weight:600;margin-left:auto}
  .charts{transition:opacity .2s}
  .charts.loading{opacity:.45}
 
@@ -599,6 +607,13 @@ function wfLabels(){
 function wfStatus(on){var s=document.getElementById('wf-status');if(s)s.classList.toggle('on',on);
   var c=document.getElementById('charts');if(c)c.classList.toggle('loading',on);}
 function wfSet(id,htmlVal){var e=document.getElementById(id);if(e&&htmlVal!=null)e.innerHTML=htmlVal;}
+function wfDollarsNote(){
+  var el=document.getElementById('wf-dollars-note'); if(!el) return;
+  var r=document.getElementById('wf-real'), inf=document.getElementById('wf-infl');
+  el.textContent=(r&&r.checked)
+    ? '\\u2713 today\\u2019s dollars ('+(inf?inf.value:2)+'%/yr)'
+    : 'future (nominal) dollars';
+}
 function wfRecompute(){
   var q=new URLSearchParams(BASE);
   q.set('down', document.getElementById('s-down').value+'%');
@@ -606,6 +621,10 @@ function wfRecompute(){
   q.set('appreciation', (document.getElementById('s-appr').value/100));
   q.set('investment_return', (document.getElementById('s-ret').value/100));
   q.set('rent', document.getElementById('s-rent').value);
+  var rc=document.getElementById('wf-real');
+  if(rc&&rc.checked){q.set('real','true');
+    var inf=document.getElementById('wf-infl'); if(inf) q.set('inflation', (inf.value/100));}
+  wfDollarsNote();
   wfStatus(true);
   fetch('/api/recompute?'+q.toString()).then(function(r){return r.json();}).then(function(d){
     wfStatus(false);
@@ -624,7 +643,15 @@ function wfOnInput(){wfLabels();clearTimeout(WF_T);WF_T=setTimeout(wfRecompute,3
 ['down','rate','appr','ret','rent'].forEach(function(k){
   var el=document.getElementById('s-'+k); if(el) el.addEventListener('input', wfOnInput);
 });
+var wfRealEl=document.getElementById('wf-real');
+if(wfRealEl) wfRealEl.addEventListener('change', function(){wfDollarsNote();wfRecompute();});
+var wfInflEl=document.getElementById('wf-infl');
+if(wfInflEl) wfInflEl.addEventListener('input', function(){
+  wfDollarsNote();
+  if(document.getElementById('wf-real').checked){clearTimeout(WF_T);WF_T=setTimeout(wfRecompute,350);}
+});
 wfLabels();
+wfDollarsNote();
 """
 
 # Save + share behaviour. RESULT_INPUTS (+ SCEN_ID) are injected per result;
@@ -1025,7 +1052,7 @@ def _run_scenario(
     *, price, down, years, postal, age, income, strategy, first_time,
     rate=None, appreciation=None, rent=None, rent_growth=None,
     property_tax_rate=None, investment_return=None, insurance=1500.0, hoa=0.0,
-    retirement_rate=None,
+    retirement_rate=None, show_real=False, inflation=None,
 ) -> dict:
     """Validate inputs, run the full pipeline, build the chart data.
 
@@ -1062,10 +1089,16 @@ def _run_scenario(
         property_tax_rate=property_tax_rate, investment_return=investment_return,
         insurance=insurance, hoa=hoa, out=None, no_charts=False,
     )
+    real_inflation = (projections.DEFAULT_INFLATION if inflation is None else float(inflation))
     try:
         params = cli.build_engine_params(args)
         projection = projections.build_projection(params)
         projection["sensitivity"] = projections.build_sensitivity(params)
+        # Optional today's-dollars view: deflate before summary + chart data.
+        if show_real:
+            projection = projections.deflate_projection(projection, real_inflation)
+            params["show_real"] = True
+            params["real_inflation"] = real_inflation
         summary = projections.compute_summary(projection, params)
         chart_data = _chart_data(projection, params)
     except Exception as exc:  # noqa: BLE001 - surface any modelling error to the user
@@ -1095,6 +1128,8 @@ def _run_scenario(
         "after_tax": after_tax,
         "strat_label": strat_label,
         "years": int(years),
+        "show_real": bool(show_real),
+        "real_inflation": real_inflation,
     }
 
 
@@ -1293,6 +1328,11 @@ def _methodology_html() -> str:
         + '<li>The mortgage rate is held fixed for the whole term (no renewal-rate changes).</li>'
         + '<li>Insurance and condo fees are held flat in nominal terms.</li>'
         + '<li>Rent for a comparable home is a single figure, not a range.</li>'
+        + '<li>Figures are in <b>future (nominal) dollars</b> by default; tick '
+        + '<b>&ldquo;Show in today&rsquo;s dollars&rdquo;</b> in the what-if panel to deflate '
+        + 'everything to present-day purchasing power (default 2%/yr inflation). It never changes '
+        + 'the verdict &mdash; both sides are deflated by the same factor &mdash; it just makes the '
+        + 'magnitudes intuitive.</li>'
         + '</ul>'
 
         + '<h2>What it deliberately leaves out</h2>'
@@ -1834,6 +1874,13 @@ def _render_result_html(sc: dict, inputs: dict, *, user: dict | None = None,
         f'<div class="wf-row"><label>Monthly rent <span class="wf-val" id="wf-rent-val">${r_rent:,}</span></label>'
         f'<input type="range" id="s-rent" min="1000" max="{rent_max}" step="100" value="{r_rent}"></div>'
         '</div>'
+        '<div class="wf-real">'
+        f'<label><input type="checkbox" id="wf-real" {"checked" if sc.get("show_real") else ""}> '
+        'Show in today’s dollars</label>'
+        '<span class="wf-real-infl">at <input type="number" id="wf-infl" min="0" max="10" step="0.5" '
+        f'value="{sc.get("real_inflation", projections.DEFAULT_INFLATION) * 100:g}">%/yr inflation</span>'
+        '<span class="wf-dollars-note" id="wf-dollars-note"></span>'
+        '</div>'
         '</section>'
     )
 
@@ -1949,6 +1996,8 @@ def evaluate(
     insurance: float = 1500.0,
     hoa: float = 0.0,
     retirement_rate: float | None = None,
+    real: bool = False,             # show all dollars in today's (inflation-adjusted) money
+    inflation: float | None = None,  # inflation for the real view (default 2%)
     sid: int | None = None,   # set when reopening a saved scenario (for "Update")
     _: None = Depends(require_auth),
 ):
@@ -1959,6 +2008,7 @@ def evaluate(
             rate=rate, appreciation=appreciation, rent=rent, rent_growth=rent_growth,
             property_tax_rate=property_tax_rate, investment_return=investment_return,
             insurance=insurance, hoa=hoa, retirement_rate=retirement_rate,
+            show_real=real, inflation=inflation,
         )
     except ValueError as exc:
         return _error_page(str(exc))
@@ -2000,6 +2050,8 @@ def recompute(
     appreciation: float | None = None,
     rent: float | None = None,
     investment_return: float | None = None,
+    real: bool = False,
+    inflation: float | None = None,
     _: None = Depends(require_auth),
 ) -> JSONResponse:
     """JSON endpoint powering the what-if sliders: new chart data + headline.
@@ -2012,7 +2064,7 @@ def recompute(
             price=price, down=down, years=years, postal=postal,
             age=age, income=income, strategy=strategy, first_time=first_time,
             rate=rate, appreciation=appreciation, rent=rent,
-            investment_return=investment_return,
+            investment_return=investment_return, show_real=real, inflation=inflation,
         )
     except ValueError as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)

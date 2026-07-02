@@ -64,6 +64,40 @@ class TestSummary:
         assert summary["total_interest_paid"] > 0
 
 
+class TestRealDollars:
+    def test_zero_inflation_is_noop(self, projection):
+        _params, proj, _summary = projection
+        assert projections.deflate_projection(proj, 0.0) is proj
+
+    def test_year_t_snapshot_deflated_by_term_factor(self, projection):
+        params, proj, summary = projection
+        T = params["term_years"]
+        real = projections.compute_summary(projections.deflate_projection(proj, 0.02), params)
+        factor = 1.02 ** T
+        assert real["buyer_net_worth"][T] == pytest.approx(summary["buyer_net_worth"][T] / factor)
+        assert real["renter_net_worth"][T] == pytest.approx(summary["renter_net_worth"][T] / factor)
+
+    def test_verdict_sign_is_invariant(self, projection):
+        _params, proj, summary = projection
+        real = projections.compute_summary(projections.deflate_projection(proj, 0.02), _params)
+        assert (summary["final_buyer_minus_renter"] < 0) == (real["final_buyer_minus_renter"] < 0)
+
+    def test_cumulative_total_uses_per_year_flows(self, projection):
+        # Real cumulative interest must sit BETWEEN the nominal total and the naive
+        # "divide the whole total by the term-end factor" shortcut — proving each
+        # year's flow is deflated by its own year, not the final one.
+        params, proj, summary = projection
+        T = params["term_years"]
+        real = projections.compute_summary(projections.deflate_projection(proj, 0.02), params)
+        naive = summary["total_interest_paid"] / (1.02 ** T)
+        assert naive < real["total_interest_paid"] < summary["total_interest_paid"]
+
+    def test_year_zero_amounts_unchanged(self, projection):
+        params, proj, summary = projection
+        real = projections.compute_summary(projections.deflate_projection(proj, 0.02), params)
+        assert real["purchase_closing_costs"] == pytest.approx(summary["purchase_closing_costs"])
+
+
 class TestCashFlowMatching:
     def test_larger_down_payment_reduces_interest(self, make_args):
         small = cli.build_engine_params(make_args(down="200000"))

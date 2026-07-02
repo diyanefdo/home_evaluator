@@ -148,7 +148,7 @@ priority than just researching them once into the Ontario/CMA tiers above.
 | **Monte Carlo** | Instead of point estimates, simulate distributions of returns/appreciation → "buying wins in X% of scenarios" with confidence bands. | L | High (credibility) |
 | **Variable mortgage rates / renewals** | Model 5-yr renewals at projected rates instead of one fixed rate for 30 years (more realistic for Canada). | M | Medium |
 | **CMHC insurance for <20% down** | Add mortgage default insurance premiums when down payment is under 20%. | S | Medium |
-| **Real (inflation-adjusted) view** (gap #7) | Toggle nominal vs today's-dollars. | S | Medium |
+| ~~**Real (inflation-adjusted) view**~~ ✅ **DONE** (gap #7) | `--real` / "Show in today's dollars" toggle deflates all series to present-day dollars (configurable inflation, default 2%); verdict-invariant display transform (`projections.deflate_projection`). | S | Medium |
 | **Rental income / house hacking** | Model a basement suite or roommate offsetting ownership cost. | M | Medium |
 | ~~**Sliders / what-if**~~ ✅ **DONE** | Results page has live sliders (down %, rate, appreciation, return, rent); debounced `/api/recompute` re-renders all 6 charts + the headline verdict in place. | M | High (engagement) |
 

@@ -154,8 +154,14 @@ appreciation × return grid (e.g. 4/5/6/7% × 7/10%) would make this visible.
   benchmark, higher for cheaper units). Still overridable via `--rent` / slider.
   Remaining uncertainty: benchmark prices are CMA-level point estimates and the
   elasticity is a single market-wide constant, not neighbourhood-specific.
-- **No inflation adjustment.** All figures nominal 2056 dollars. Fine for a
-  like-for-like comparison, but the absolute numbers look bigger than they feel.
+- ~~**No inflation adjustment.** All figures nominal 2056 dollars. Fine for a
+  like-for-like comparison, but the absolute numbers look bigger than they feel.~~
+  **Addressed (2026-07-01):** a **today's-dollars (real) view** now ships — `--real`
+  (CLI) / a "Show in today's dollars" toggle (web), deflating every series to
+  present-day purchasing power at a configurable inflation rate (default 2%).
+  `projections.deflate_projection` handles level series pointwise, cumulative costs
+  by per-year flow, and monthly series per month; the verdict is invariant. The
+  engine stays nominal — this is a display transform only.
 - **Home insurance held flat** at $1,500/yr (should grow with inflation; minor).
 - **Property tax** grows on its own bill at 3.5%/yr, decoupled from appreciation
   — realistic, not a flaw, but worth noting.

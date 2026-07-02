@@ -76,6 +76,89 @@ _DEFAULTS = {
     "retirement_marginal_rate": tax.RETIREMENT_MARGINAL_RATE,
 }
 
+# Long-run CPI assumption used only for the OPTIONAL "today's dollars" (real)
+# display transform. The nominal engine never uses this — it only rescales
+# already-computed outputs so magnitudes read in present-day purchasing power.
+DEFAULT_INFLATION = 0.02
+
+# Currency arrays in a projection, classified by how they must be deflated to
+# real dollars. Level series are point-in-time balances (divide each year by its
+# deflator); cumulative series are running sums of per-year flows (deflate each
+# year's *flow* by that year's deflator, then re-accumulate); monthly series are
+# per-month levels (deflate by the deflator at that fractional year).
+_REAL_LEVEL_ANNUAL = (
+    "home_value", "loan_balance", "equity", "renter_portfolio",
+    "owner_adv_portfolio", "buyer_net_worth_after_tax", "renter_net_worth_after_tax",
+    "owner_inv_after_tax", "renter_inv_after_tax", "selling_costs",
+)
+_REAL_CUMULATIVE_ANNUAL = (
+    "cum_principal", "cum_interest", "cum_property_tax", "cum_insurance_hoa",
+    "renter_contributions", "owner_adv_contributions",
+)
+_REAL_LEVEL_MONTHLY = ("monthly_ownership_cost", "monthly_rent")
+
+
+def deflate_projection(projection: dict, inflation: float) -> dict:
+    """Return a copy of ``projection`` with all currency series in today's dollars.
+
+    Purely a display transform: every future dollar at year ``y`` is divided by
+    ``(1 + inflation) ** y`` (months use the fractional-year deflator). Because
+    it deflates the arrays in place of value, running :func:`compute_summary` on
+    the result yields the same executive metrics expressed in real dollars —
+    year-T snapshots deflate by the term-end factor, and cumulative totals come
+    out as the sum of each year's deflated flow. The verdict (who leads) is
+    invariant, since both sides are divided by the same factors.
+
+    ``inflation`` of 0 (or falsy) returns the projection unchanged.
+    """
+    if not inflation:
+        return projection
+
+    years = np.asarray(projection["years"], dtype=float)
+    d_year = (1.0 + inflation) ** years                      # deflator per annual index
+    out = dict(projection)
+
+    for key in _REAL_LEVEL_ANNUAL:
+        arr = projection.get(key)
+        if arr is not None:
+            out[key] = np.asarray(arr, dtype=float) / d_year
+
+    for key in _REAL_CUMULATIVE_ANNUAL:
+        arr = projection.get(key)
+        if arr is not None:
+            flows = np.diff(np.asarray(arr, dtype=float), prepend=0.0)
+            out[key] = np.cumsum(flows / d_year)
+
+    months = projection.get("months")
+    if months is not None:
+        d_month = (1.0 + inflation) ** (np.asarray(months, dtype=float) / 12.0)
+        for key in _REAL_LEVEL_MONTHLY:
+            arr = projection.get(key)
+            if arr is not None:
+                out[key] = np.asarray(arr, dtype=float) / d_month
+
+    # Registered-account balance sub-arrays (annual levels) feed the summary's
+    # TFSA/RRSP/taxable breakdown, so deflate any that line up with the years axis.
+    for acct_key in ("renter_accounts", "owner_accounts"):
+        acct = projection.get(acct_key)
+        if isinstance(acct, dict):
+            new_acct = dict(acct)
+            for sub, val in acct.items():
+                arr = np.asarray(val)
+                if arr.dtype.kind in "fi" and arr.shape == d_year.shape:
+                    new_acct[sub] = arr.astype(float) / d_year
+            out[acct_key] = new_acct
+
+    # Sensitivity grid holds year-T net-worth gaps -> deflate by the term-end factor.
+    sens = projection.get("sensitivity")
+    if isinstance(sens, dict) and sens.get("gap_grid") is not None:
+        new_sens = dict(sens)
+        new_sens["gap_grid"] = np.asarray(sens["gap_grid"], dtype=float) / d_year[-1]
+        out["sensitivity"] = new_sens
+
+    out["_real_inflation"] = float(inflation)
+    return out
+
 
 def _invest_with_accounts(
     initial_lump: float,
