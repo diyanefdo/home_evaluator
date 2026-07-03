@@ -281,13 +281,20 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
    --radius:14px;
  }
  *{box-sizing:border-box}
+ /* Full-viewport background: a light, low-contrast living room photo under a soft
+    veil, so wide screens feel warm and airy without hurting readability. */
+ html{min-height:100%;color-scheme:light;background-color:#eef3f8;
+   background-image:
+     linear-gradient(180deg, rgba(248,251,253,.52) 0, rgba(244,248,252,.64) 100%),
+     url('/static/img/livingroom-bg.jpg');
+   background-repeat:no-repeat,no-repeat;
+   background-position:center top,center 24%;
+   background-size:cover,cover;
+   background-attachment:fixed,fixed}
  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
    max-width:1000px;margin:0 auto;padding:1.5rem 1rem 3rem;color:var(--ink);
    line-height:1.55;-webkit-text-size-adjust:100%;
-   background:
-     radial-gradient(1100px 520px at 50% -280px,#dcebf7 0,rgba(220,235,247,0) 70%),
-     linear-gradient(180deg,#f3f7fb 0,#eef3f8 100%);
-   background-color:var(--bg);background-attachment:fixed;min-height:100vh}
+   background:transparent;min-height:100vh;position:relative}
  h1{font-size:1.55rem;line-height:1.25;margin:.2rem 0 1rem;letter-spacing:-.01em}
  h1.section{font-size:1.25rem;margin:.2rem 0 .4rem}
  p.lead{color:var(--muted);margin:.2rem 0 1rem;font-size:1.02rem}
@@ -333,8 +340,19 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
  .result-banner::after{content:"";position:absolute;right:-70px;top:-70px;
    width:220px;height:220px;border-radius:50%;pointer-events:none;
    background:radial-gradient(circle at 30% 30%,rgba(255,255,255,.18),rgba(255,255,255,0) 70%)}
- .rb-art{flex:0 0 96px;width:96px;position:relative;z-index:1}
+ .rb-art{flex:0 0 96px;width:96px;position:relative;z-index:1;display:block;
+   cursor:pointer;text-decoration:none;transition:transform .15s}
+ .rb-art:hover{transform:translateY(-2px) scale(1.03)}
+ .rb-art:focus-visible{outline:3px solid rgba(255,255,255,.7);outline-offset:3px;border-radius:14px}
  .rb-art svg{width:100%;height:auto;display:block;
+   filter:drop-shadow(0 10px 16px rgba(8,40,64,.34));animation:floaty 6s ease-in-out infinite}
+ /* clickable house badge in sub-page heroes (my runs / scenarios / admin) —
+    matches the results-page badge (.rb-art): left side, 96px. */
+ .hero-home{flex:0 0 96px;width:96px;display:block;position:relative;z-index:1;
+   cursor:pointer;text-decoration:none;transition:transform .15s}
+ .hero-home:hover{transform:translateY(-2px) scale(1.03)}
+ .hero-home:focus-visible{outline:3px solid rgba(255,255,255,.7);outline-offset:3px;border-radius:14px}
+ .hero-home svg{width:100%;height:auto;display:block;
    filter:drop-shadow(0 10px 16px rgba(8,40,64,.34));animation:floaty 6s ease-in-out infinite}
  .rb-body{flex:1 1 260px;min-width:0;position:relative;z-index:1}
  .rb-body h1{color:#fff;margin:.15rem 0 .5rem;font-size:1.5rem}
@@ -449,6 +467,22 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
  .hero-art svg{width:100%;height:auto;display:block;
    filter:drop-shadow(0 12px 18px rgba(8,40,64,.32));
    animation:floaty 6s ease-in-out infinite}
+ /* real home photo in the hero (replaces the SVG illustration) */
+ .hero-photo{flex:1 1 300px;max-width:380px}
+ .hero-photo img{width:100%;height:auto;margin:0;display:block;
+   border:4px solid rgba(255,255,255,.6);border-radius:18px;
+   box-shadow:0 18px 38px rgba(8,40,64,.36);
+   aspect-ratio:3/2;object-fit:cover;background:#dfeaf5}
+ /* home-photo gallery strip below the form */
+ .home-gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:.9rem;margin:1.2rem 0 .2rem}
+ .home-gallery figure{margin:0;position:relative;border-radius:14px;overflow:hidden;
+   box-shadow:var(--shadow);border:1px solid var(--line)}
+ .home-gallery img{width:100%;height:158px;object-fit:cover;margin:0;border:0;border-radius:0;
+   display:block;transition:transform .4s ease}
+ .home-gallery figure:hover img{transform:scale(1.06)}
+ .home-gallery figcaption{position:absolute;left:0;right:0;bottom:0;padding:.85rem .7rem .5rem;
+   color:#fff;font-size:.82rem;font-weight:600;letter-spacing:.01em;
+   background:linear-gradient(180deg,rgba(8,30,52,0),rgba(8,30,52,.74))}
 
  /* inline-SVG illustration animations */
  .sun{transform-box:fill-box;transform-origin:center;animation:sunpulse 5s ease-in-out infinite}
@@ -473,6 +507,12 @@ PAGE_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
    .hero-copy{flex-basis:100%}
    .hero p{margin:0 auto}
    .hero-art{flex-basis:165px;max-width:165px;margin:0 auto;order:-1}
+   .hero-photo{flex-basis:100%;max-width:100%;order:-1}
+   .hero-home{flex-basis:78px;width:78px;margin:0 auto;order:-1}
+   .home-gallery{grid-template-columns:1fr 1fr;gap:.6rem}
+   .home-gallery img{height:128px}
+   .home-gallery figure:last-child{grid-column:1 / -1}
+   .home-gallery figure:last-child img{height:150px}
    .result-banner{padding:1.4rem 1.3rem;gap:1rem;text-align:center;justify-content:center}
    .rb-body{flex-basis:100%}
    .rb-art{order:-1;flex-basis:78px;width:78px;margin:0 auto}
@@ -945,6 +985,16 @@ RESULT_BADGE_SVG = """
   </g>
 </svg>"""
 
+
+def _home_badge() -> str:
+    """The house badge rendered as a link back to the homepage, for sub-page heroes."""
+    return (
+        '<a class="hero-home" href="/" '
+        'aria-label="Home Evaluator — back to the homepage" '
+        f'title="Back to the homepage">{RESULT_BADGE_SVG}</a>'
+    )
+
+
 FORM = PAGE_HEAD + """
 <section class="hero">
   <div class="hero-copy">
@@ -953,66 +1003,10 @@ FORM = PAGE_HEAD + """
     <p>See whether buying or renting builds more wealth over your mortgage &mdash;
        six interactive charts from one scenario.</p>
   </div>
-  <div class="hero-art" aria-hidden="true">
-    <svg viewBox="0 0 240 220" role="img" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#cdeafd"/><stop offset="1" stop-color="#eef8ff"/>
-        </linearGradient>
-        <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#ffd76a"/><stop offset="1" stop-color="#f4a836"/>
-        </linearGradient>
-        <linearGradient id="roof" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#2b93d6"/><stop offset="1" stop-color="#155a8a"/>
-        </linearGradient>
-        <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#eef3f8"/>
-        </linearGradient>
-        <clipPath id="panel"><rect x="10" y="10" width="220" height="200" rx="26"/></clipPath>
-      </defs>
-
-      <rect x="10" y="10" width="220" height="200" rx="26" fill="url(#sky)"/>
-      <g clip-path="url(#panel)">
-        <!-- sun -->
-        <circle class="sun" cx="56" cy="54" r="19" fill="url(#sun)"/>
-        <!-- drifting clouds -->
-        <g class="cloud" fill="#ffffff" opacity=".9">
-          <ellipse cx="120" cy="46" rx="20" ry="12"/>
-          <ellipse cx="104" cy="52" rx="13" ry="9"/>
-          <ellipse cx="136" cy="52" rx="14" ry="9"/>
-        </g>
-        <g class="cloud c2" fill="#ffffff" opacity=".75">
-          <ellipse cx="40" cy="96" rx="16" ry="9"/>
-          <ellipse cx="54" cy="100" rx="11" ry="7"/>
-        </g>
-        <!-- neighbourhood skyline -->
-        <rect x="20" y="150" width="34" height="50" rx="3" fill="#cdddec"/>
-        <rect x="186" y="138" width="36" height="62" rx="3" fill="#cdddec"/>
-        <rect x="168" y="160" width="22" height="40" rx="3" fill="#bcd2e6"/>
-        <!-- ground -->
-        <rect x="10" y="186" width="220" height="24" fill="#d7ead9"/>
-        <!-- house -->
-        <rect x="150" y="92" width="13" height="26" fill="#155a8a"/>
-        <rect x="90" y="120" width="76" height="66" fill="url(#wall)" stroke="#dbe5ef"/>
-        <polygon points="80,122 128,84 176,122" fill="url(#roof)"/>
-        <!-- door -->
-        <rect x="116" y="150" width="22" height="36" rx="2" fill="#f4a836"/>
-        <circle cx="133" cy="168" r="2" fill="#8a5a12"/>
-        <!-- windows -->
-        <g stroke="#cfe0ef" stroke-width="2">
-          <rect class="win" x="97" y="132" width="19" height="19" rx="2" fill="#bfe3fb"/>
-          <rect class="win w2" x="142" y="132" width="19" height="19" rx="2" fill="#bfe3fb"/>
-        </g>
-        <!-- hanging keys -->
-        <g class="keys">
-          <line x1="200" y1="22" x2="200" y2="40" stroke="#9aa7b4" stroke-width="2"/>
-          <circle cx="200" cy="50" r="9" fill="none" stroke="url(#sun)" stroke-width="4"/>
-          <rect x="198" y="58" width="4" height="24" fill="#f4a836"/>
-          <rect x="202" y="72" width="6" height="3.5" fill="#f4a836"/>
-          <rect x="202" y="78" width="6" height="3.5" fill="#f4a836"/>
-        </g>
-      </g>
-    </svg>
+  <div class="hero-art hero-photo">
+    <img src="/static/img/home-hero.jpg" width="1100" height="733"
+         alt="A classic Canadian home with a wraparound porch on a landscaped lawn"
+         fetchpriority="high">
   </div>
 </section>
 
@@ -1080,6 +1074,24 @@ FORM = PAGE_HEAD + """
     <button type="submit">Evaluate scenario</button>
   </form>
 </div>
+
+<section class="home-gallery" aria-label="Homes across Canada">
+  <figure>
+    <img src="/static/img/home-suburban.jpg" width="800" height="533" loading="lazy"
+         alt="Modern detached home with a pool">
+    <figcaption>Detached &amp; modern</figcaption>
+  </figure>
+  <figure>
+    <img src="/static/img/home-modern.jpg" width="800" height="533" loading="lazy"
+         alt="Timber-clad home lit up at dusk">
+    <figcaption>Cottage &amp; rural</figcaption>
+  </figure>
+  <figure>
+    <img src="/static/img/home-interior.jpg" width="800" height="533" loading="lazy"
+         alt="Contemporary architect-designed home and garden">
+    <figcaption>Architect-designed</figcaption>
+  </figure>
+</section>
 
 <p class="disclaimer">
   Projections use long-run historical assumptions and are not financial advice.
@@ -1567,7 +1579,7 @@ def admin_dashboard(request: Request):
 
     body = (
         PAGE_HEAD
-        + '<section class="hero"><div class="hero-copy">'
+        + '<section class="hero">' + _home_badge() + '<div class="hero-copy">'
         + '<span class="eyebrow"><span class="dot"></span> Admin</span>'
         + '<h1>Usage analytics</h1><p>Anonymized evaluation activity. No personal data '
         + 'is stored &mdash; only region, price range, and the verdict.</p></div></section>'
@@ -1719,7 +1731,7 @@ def scenarios_list(request: Request):
                       'evaluation, then use <b>Save scenario</b> on the results page.</div>')
     body = (
         PAGE_HEAD
-        + '<section class="hero"><div class="hero-copy">'
+        + '<section class="hero">' + _home_badge() + '<div class="hero-copy">'
         + '<span class="eyebrow"><span class="dot"></span> Your account</span>'
         + '<h1>Saved scenarios</h1>'
         + '<p>Reopen, rename, delete, or select a few to compare side by side.</p>'
@@ -1795,7 +1807,7 @@ def history_page(request: Request):
                  'signed in is recorded here.</div>')
     body = (
         PAGE_HEAD
-        + '<section class="hero"><div class="hero-copy">'
+        + '<section class="hero">' + _home_badge() + '<div class="hero-copy">'
         + '<span class="eyebrow"><span class="dot"></span> Your account</span>'
         + '<h1>My runs</h1><p>Your recent evaluations. Reopen one, or save it as a '
         + 'named scenario.</p></div></section>'
@@ -1957,7 +1969,8 @@ def _render_result_html(sc: dict, inputs: dict, *, user: dict | None = None,
 
     banner = (
         '<section class="result-banner reveal">'
-        f'<div class="rb-art" aria-hidden="true">{RESULT_BADGE_SVG}</div>'
+        f'<a class="rb-art" href="/" aria-label="Home Evaluator — back to the homepage" '
+        f'title="Back to the homepage">{RESULT_BADGE_SVG}</a>'
         '<div class="rb-body">'
         '<span class="eyebrow"><span class="dot"></span> Your results</span>'
         f"<h1>{html.escape(params['postal_code'])} &middot; {html.escape(params['region_label'])}</h1>"
