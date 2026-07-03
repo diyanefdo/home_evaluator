@@ -142,6 +142,18 @@ finals), **benchmark prices** (CREA/board), and **rents** (CMHC HMIP) are
 data-grounded; only **appreciation** stays a forward-sustainable estimate (see
 `data.py` SOURCES).
 
+**GST/HST on new construction.** Resale homes are GST/HST-exempt, so `--new-build`
+(CLI) or the **"New construction?"** dropdown (web) is what triggers it. A new home
+owes 5% federal GST everywhere, plus the provincial HST portion in HST provinces,
+net of the new-housing rebates: the federal rebate (36% of GST, fully phased out by
+$450k), the **2025 first-time-buyer GST rebate** (up to 100% of the GST on a new
+home ≤ $1M, phasing out by $1.5M — stacks with `--first-time-buyer`), and Ontario's
+provincial rebate (75% of the 8% portion, capped at $24,000). Modelled by
+`tax.gst_hst_new_housing()` and folded into purchase closing costs. Ontario's
+provincial rebate is modelled precisely; BC/AB/SK/MB are GST-only (so the 5% layer
+is exact), while Québec (QST) and the Atlantic HST provinces currently model only
+the federal 5% (their provincial rebates are out of scope).
+
 **Rent is estimated from your home's price**, not a flat regional average. Each
 region carries a benchmark price/rent pair; the comparable rent is scaled from it
 by your entered price using a sub-linear price-to-rent relationship

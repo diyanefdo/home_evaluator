@@ -85,13 +85,19 @@ def build_engine_params(args: argparse.Namespace) -> dict:
     include_tx = not bool(getattr(args, "no_transaction_costs", False))
     ltt_region = region.get("ltt_region", "ontario")
     first_time = bool(getattr(args, "first_time_buyer", False))
+    new_build = bool(getattr(args, "new_build", False))
     purchase_legal = _override(getattr(args, "purchase_legal", None), tax.PURCHASE_LEGAL_FEE)
     params["include_transaction_costs"] = include_tx
     params["ltt_region"] = ltt_region
     params["first_time_buyer"] = first_time
+    params["new_build"] = new_build
     base_closing = (
-        tax.purchase_closing_costs(price, ltt_region, first_time, purchase_legal)
+        tax.purchase_closing_costs(price, ltt_region, first_time, purchase_legal, new_build)
         if include_tx else 0.0
+    )
+    params["gst_hst"] = (
+        tax.gst_hst_new_housing(price, ltt_region, first_time, new_build)
+        if include_tx else {"applies": False, "total": 0.0}
     )
     params["commission_rate"] = _override(getattr(args, "commission_rate", None), tax.REALTOR_COMMISSION_RATE)
     params["hst_rate"] = tax.HST_RATE
@@ -184,10 +190,16 @@ def print_report(params: dict, summary: dict, chart_paths: list[str]) -> None:
         ft = "  (first-time-buyer rebate applied)" if params.get("first_time_buyer") else ""
         cmhc = params.get("cmhc") or {}
         pst = cmhc.get("pst", 0.0) if cmhc.get("required") else 0.0
+        gst_hst = params.get("gst_hst") or {}
+        gh = gst_hst.get("total", 0.0) if gst_hst.get("applies") else 0.0
         print()
         print("  TRANSACTION COSTS:")
-        print(f"    At purchase       : {_money(pc - pst, sym)} land-transfer tax + legal "
+        print(f"    At purchase       : {_money(pc - pst - gh, sym)} land-transfer tax + legal "
               f"({params.get('ltt_region', 'ontario')}){ft}")
+        if gst_hst.get("applies"):
+            ftg = "; first-time-buyer GST rebate" if params.get("first_time_buyer") else ""
+            print(f"    GST/HST (new build): {_money(gh, sym)} on the price, "
+                  f"net of the new-housing rebate{ftg}")
         print(f"    At sale (yr {T})    : {_money(sc, sym)} "
               f"(~{params.get('commission_rate', 0.05) * 100:.0f}% commission + HST + legal)")
         if cmhc.get("required"):
@@ -322,7 +334,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     # Transaction costs: land-transfer tax at purchase, realtor/legal at sale.
     x = p.add_argument_group("transaction costs (purchase + sale)")
     x.add_argument("--first-time-buyer", action="store_true",
-                   help="Apply first-time-buyer land-transfer-tax rebates")
+                   help="Apply first-time-buyer land-transfer-tax rebates (and, on a "
+                        "--new-build, the 2025 first-time-buyer GST rebate)")
+    x.add_argument("--new-build", action="store_true",
+                   help="Home is new construction from a builder: adds GST/HST on the "
+                        "price, net of the new-housing rebate (resale homes are exempt)")
     x.add_argument("--commission-rate", type=float,
                    help="Realtor commission at sale (decimal, default 0.05)")
     x.add_argument("--purchase-legal", type=float,

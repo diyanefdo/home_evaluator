@@ -55,6 +55,16 @@ class TestBuildEngineParams:
         params = cli.build_engine_params(make_args(no_transaction_costs=True))
         assert params["purchase_closing_costs"] == 0.0
 
+    def test_new_build_adds_gst_hst_to_closing(self, make_args):
+        resale = cli.build_engine_params(make_args(postal="M2J 0E8"))
+        newb = cli.build_engine_params(make_args(postal="M2J 0E8", new_build=True))
+        assert newb["gst_hst"]["applies"] is True
+        assert newb["purchase_closing_costs"] > resale["purchase_closing_costs"]
+
+    def test_resale_default_has_no_gst_hst(self, make_args):
+        params = cli.build_engine_params(make_args())
+        assert params["gst_hst"]["applies"] is False
+
     def test_uninsurable_low_down_raises(self, make_args):
         with pytest.raises(SystemExit):
             cli.build_engine_params(make_args(price=2_000_000, down="100000"))  # 5% on >$1.5M

@@ -251,9 +251,98 @@ def purchase_closing_costs(
     region: str = "ontario",
     first_time: bool = False,
     legal_fee: float = PURCHASE_LEGAL_FEE,
+    new_build: bool = False,
 ) -> float:
-    """One-time cash cost of buying: land-transfer tax + legal/inspection fees."""
-    return land_transfer_tax(price, region, first_time) + float(legal_fee)
+    """One-time cash cost of buying: land-transfer tax + legal/inspection fees.
+
+    A ``new_build`` (bought from a builder) also owes GST/HST on the price, net of
+    the applicable new-housing rebate; resale homes are GST/HST-exempt.
+    """
+    ltt = land_transfer_tax(price, region, first_time)
+    gst_hst = gst_hst_new_housing(price, region, first_time, new_build)["total"]
+    return ltt + gst_hst + float(legal_fee)
+
+
+# --------------------------------------------------------------------------- #
+# GST/HST New Housing Rebate (NEW-construction homes only; resale is exempt).
+# --------------------------------------------------------------------------- #
+# A new home from a builder owes 5% federal GST everywhere, plus the provincial
+# HST portion in HST provinces. New-housing rebates claw a chunk of that back:
+#   - Federal rebate: 36% of the GST, full up to $350k, phased linearly to $0 at
+#     $450k. (So $0 federal standard rebate on homes >= $450k.)
+#   - 2025 First-Time Home Buyers' GST Rebate: up to 100% of the GST on a new home
+#     <= $1M, phased linearly to $0 at $1.5M. Applies only to first-time buyers and
+#     supersedes the smaller standard rebate when larger.
+#   - Ontario provincial rebate: 75% of the 8% provincial portion, capped at
+#     $24,000 (reached at a $400k provincial base).
+# Only Ontario's provincial rebate is modelled; BC/AB/SK/MB + territories are
+# GST-only (5%), so the federal layer is exact there. Quebec (QST) and the Atlantic
+# HST provinces carry province-specific provincial rebates that are out of scope,
+# so only their 5% federal GST layer is modelled (a documented approximation).
+GST_RATE = 0.05                        # federal GST on new homes
+_FEDERAL_REBATE_RATE = 0.36            # 36% of GST, up to the $350k ceiling
+_FEDERAL_REBATE_FULL_MAX = 350_000.0
+_FEDERAL_REBATE_ZERO = 450_000.0
+_FTB_GST_FULL_MAX = 1_000_000.0        # 2025 FTB GST rebate: full up to $1M
+_FTB_GST_ZERO = 1_500_000.0            # phased to $0 at $1.5M
+_ON_PROV_HST_RATE = 0.08               # Ontario provincial portion of HST
+_ON_PROV_REBATE_RATE = 0.75
+_ON_PROV_REBATE_MAX = 24_000.0
+_ON_HST_REGIONS = {"ontario", "toronto"}  # where the provincial rebate is modelled
+
+
+def _federal_gst_net(price: float, first_time: bool) -> float:
+    """Federal GST on a new home after the standard (or first-time-buyer) rebate."""
+    gst = GST_RATE * price
+    if price <= _FEDERAL_REBATE_FULL_MAX:
+        standard = _FEDERAL_REBATE_RATE * gst
+    elif price < _FEDERAL_REBATE_ZERO:
+        full = _FEDERAL_REBATE_RATE * GST_RATE * _FEDERAL_REBATE_FULL_MAX
+        standard = full * (_FEDERAL_REBATE_ZERO - price) / (_FEDERAL_REBATE_ZERO - _FEDERAL_REBATE_FULL_MAX)
+    else:
+        standard = 0.0
+    rebate = standard
+    if first_time:
+        if price <= _FTB_GST_FULL_MAX:
+            ftb = gst
+        elif price < _FTB_GST_ZERO:
+            ftb = gst * (_FTB_GST_ZERO - price) / (_FTB_GST_ZERO - _FTB_GST_FULL_MAX)
+        else:
+            ftb = 0.0
+        rebate = max(standard, ftb)
+    return max(0.0, gst - rebate)
+
+
+def _provincial_hst_net(price: float, region: str) -> float:
+    """Provincial HST portion on a new home after the provincial rebate (Ontario)."""
+    if region not in _ON_HST_REGIONS:
+        return 0.0
+    prov = _ON_PROV_HST_RATE * price
+    rebate = min(_ON_PROV_REBATE_RATE * prov, _ON_PROV_REBATE_MAX)
+    return max(0.0, prov - rebate)
+
+
+def gst_hst_new_housing(
+    price: float,
+    region: str = "ontario",
+    first_time: bool = False,
+    new_build: bool = False,
+) -> dict:
+    """Net GST/HST payable on a NEW-construction home after new-housing rebates.
+
+    Resale homes are exempt (``applies`` False, totals 0). New builds owe 5% federal
+    GST everywhere (net of the federal rebate, or the 2025 first-time-buyer GST
+    rebate when larger), plus the provincial HST portion where modelled (Ontario).
+    Returns a breakdown: ``gst_net`` (federal), ``prov_net`` (provincial), ``total``.
+    """
+    if not new_build:
+        return {"applies": False, "gst_net": 0.0, "prov_net": 0.0, "total": 0.0,
+                "first_time": bool(first_time)}
+    price = float(price)
+    gst_net = _federal_gst_net(price, first_time)
+    prov_net = _provincial_hst_net(price, region)
+    return {"applies": True, "gst_net": gst_net, "prov_net": prov_net,
+            "total": gst_net + prov_net, "first_time": bool(first_time)}
 
 
 # --------------------------------------------------------------------------- #

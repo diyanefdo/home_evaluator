@@ -157,3 +157,55 @@ class TestIncomeTax:
 
     def test_sources_are_strings(self):
         assert all(isinstance(v, str) for v in tax.SOURCES.values())
+
+
+# --------------------------------------------------------------------------- #
+# GST/HST New Housing Rebate (new-build homes)
+# --------------------------------------------------------------------------- #
+class TestGstHstNewHousing:
+    def test_resale_is_exempt(self):
+        # A resale home (new_build False) owes no GST/HST regardless of region.
+        d = tax.gst_hst_new_housing(1_000_000, "toronto", first_time=True, new_build=False)
+        assert d["applies"] is False
+        assert d["total"] == 0.0
+
+    def test_ontario_new_build_not_first_time(self):
+        # $1M new build in Ontario: full 5% GST (no federal rebate above $450k) +
+        # 8% provincial less the $24k-capped 75% rebate = $50k + $56k = $106k.
+        d = tax.gst_hst_new_housing(1_000_000, "toronto", first_time=False, new_build=True)
+        assert d["gst_net"] == pytest.approx(50_000.0)
+        assert d["prov_net"] == pytest.approx(56_000.0)
+        assert d["total"] == pytest.approx(106_000.0)
+
+    def test_first_time_gst_rebate_waives_federal_gst_under_1m(self):
+        # The 2025 FTB GST rebate zeroes the 5% GST on a <=$1M new build.
+        d = tax.gst_hst_new_housing(1_000_000, "ontario", first_time=True, new_build=True)
+        assert d["gst_net"] == pytest.approx(0.0)
+        assert d["prov_net"] == pytest.approx(56_000.0)
+
+    def test_first_time_gst_rebate_phases_out_by_1_5m(self):
+        # At $1.25M the FTB rebate is half phased out -> half the GST remains.
+        d = tax.gst_hst_new_housing(1_250_000, "ontario", first_time=True, new_build=True)
+        assert d["gst_net"] == pytest.approx(0.5 * 0.05 * 1_250_000)
+
+    def test_federal_rebate_phases_out_between_350k_and_450k(self):
+        below = tax.gst_hst_new_housing(350_000, "bc", first_time=False, new_build=True)
+        assert below["gst_net"] == pytest.approx(0.05 * 350_000 * (1 - 0.36))
+        above = tax.gst_hst_new_housing(450_000, "bc", first_time=False, new_build=True)
+        assert above["gst_net"] == pytest.approx(0.05 * 450_000)  # no rebate left
+
+    def test_gst_only_province_has_no_provincial_portion(self):
+        # BC (and AB/SK/MB) are GST-only: no provincial HST rebate line.
+        d = tax.gst_hst_new_housing(800_000, "bc", first_time=False, new_build=True)
+        assert d["prov_net"] == 0.0
+        assert d["total"] == pytest.approx(d["gst_net"])
+
+    def test_ontario_provincial_rebate_is_capped_at_24k(self):
+        # Provincial rebate maxes at $24k (reached by a $400k provincial base).
+        d = tax.gst_hst_new_housing(2_000_000, "toronto", first_time=False, new_build=True)
+        assert d["prov_net"] == pytest.approx(0.08 * 2_000_000 - 24_000.0)
+
+    def test_closing_costs_include_new_build_gst(self):
+        resale = tax.purchase_closing_costs(1_000_000, "toronto", False, new_build=False)
+        newb = tax.purchase_closing_costs(1_000_000, "toronto", False, new_build=True)
+        assert newb - resale == pytest.approx(106_000.0)

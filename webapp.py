@@ -177,6 +177,8 @@ def _sanitize_inputs(raw: dict) -> dict:
             out[k] = float(raw[k])
     if "first_time" in raw:
         out["first_time"] = bool(raw["first_time"]) and str(raw["first_time"]).lower() not in _FALSY
+    if "new_build" in raw:
+        out["new_build"] = bool(raw["new_build"]) and str(raw["new_build"]).lower() not in _FALSY
     return out
 
 
@@ -191,6 +193,7 @@ def _run_from_inputs(inputs: dict) -> dict:
         income=float(inputs.get("income", 120000.0)),
         strategy=str(inputs.get("strategy", "shelter-first")),
         first_time=bool(inputs.get("first_time", False)),
+        new_build=bool(inputs.get("new_build", False)),
         rate=inputs.get("rate"), appreciation=inputs.get("appreciation"),
         rent=inputs.get("rent"), rent_growth=inputs.get("rent_growth"),
         property_tax_rate=inputs.get("property_tax_rate"),
@@ -1068,7 +1071,15 @@ FORM = PAGE_HEAD + """
           <option value="false" selected>No</option>
           <option value="true">Yes</option>
         </select>
-        <small>Applies land-transfer-tax rebates.</small>
+        <small>Applies land-transfer-tax rebates (+ GST rebate on a new build).</small>
+      </div>
+      <div class="field">
+        <label for="new_build">New construction?</label>
+        <select id="new_build" name="new_build">
+          <option value="false" selected>No (resale)</option>
+          <option value="true">Yes (from a builder)</option>
+        </select>
+        <small>New builds owe GST/HST on the price, net of the new-housing rebate.</small>
       </div>
     </div>
     <button type="submit">Evaluate scenario</button>
@@ -1181,7 +1192,7 @@ def _run_scenario(
     rate=None, appreciation=None, rent=None, rent_growth=None,
     property_tax_rate=None, investment_return=None, insurance=1500.0, hoa=0.0,
     retirement_rate=None, show_real=False, inflation=None,
-    renewals=False, renewal_rate=None,
+    renewals=False, renewal_rate=None, new_build=False,
 ) -> dict:
     """Validate inputs, run the full pipeline, build the chart data.
 
@@ -1212,7 +1223,8 @@ def _run_scenario(
     args = argparse.Namespace(
         price=price, down=down, years=years, postal=postal,
         age=age, income=income, account_strategy=strategy, retirement_rate=retirement_rate,
-        first_time_buyer=first_time, commission_rate=None, purchase_legal=None,
+        first_time_buyer=first_time, new_build=new_build,
+        commission_rate=None, purchase_legal=None,
         no_transaction_costs=False, live=_LIVE_DATA,
         rate=rate, appreciation=appreciation, rent=rent, rent_growth=rent_growth,
         property_tax_rate=property_tax_rate, investment_return=investment_return,
@@ -1262,19 +1274,26 @@ def _run_scenario(
         "real_inflation": real_inflation,
         "renewals": bool(summary.get("renewals_enabled")),
         "renewal_rate": summary.get("renewal_rate"),
+        "new_build": bool(new_build),
     }
 
 
 def _buy_costs_field(sym: str, summary: dict, params: dict) -> str:
-    """Up-front purchase-cost tile, breaking out CMHC when the loan is high-ratio."""
+    """Up-front purchase-cost tile, breaking out CMHC + new-build GST/HST."""
     pc = summary.get("purchase_closing_costs", 0)
     cmhc = params.get("cmhc") or {}
+    gst_hst = params.get("gst_hst") or {}
+    gh = gst_hst.get("total", 0.0) if gst_hst.get("applies") else 0.0
+    gh_note = ""
+    if gh:
+        ftg = ", first-time GST rebate" if gst_hst.get("first_time") else ""
+        gh_note = f' + {sym}{gh:,.0f} GST/HST <small>(new build{ftg})</small>'
     if cmhc.get("required"):
         pst = cmhc.get("pst", 0.0)
         note = (f'(land-transfer + legal + {sym}{pst:,.0f} CMHC PST; '
                 f'+{sym}{cmhc.get("premium", 0):,.0f} premium financed @ {cmhc.get("rate", 0) * 100:.2f}%)')
-        return f'{sym}{pc - pst:,.0f} <small>{note}</small>'
-    return f'{sym}{pc:,.0f} <small>(land-transfer + legal)</small>'
+        return f'{sym}{pc - pst - gh:,.0f} <small>{note}</small>{gh_note}'
+    return f'{sym}{pc - gh:,.0f} <small>(land-transfer + legal)</small>{gh_note}'
 
 
 def _result_fields(sc: dict) -> dict:
@@ -1444,6 +1463,15 @@ def _methodology_html() -> str:
         + 'Saskatchewan (which levy no LTT) &mdash; plus legal/inspection fees, with first-time-buyer '
         + 'rebates where applicable. At sale: ~5% realtor commission + HST + legal. The buyer&rsquo;s '
         + 'up-front costs are credited to the renter&rsquo;s invested lump to keep things fair.</p>'
+        + '<p><b>GST/HST on new construction.</b> Resale homes are GST/HST-exempt, so this only '
+        + 'applies when you mark the home as a <b>new build</b>. A new home owes 5% federal GST '
+        + '(everywhere), plus the provincial HST portion in HST provinces. New-housing rebates claw '
+        + 'a chunk back: the federal rebate (36% of GST, fully phased out by $450k); the <b>2025 '
+        + 'first-time-buyer GST rebate</b> (up to 100% of the GST on a new home &le;$1M, phasing out '
+        + 'by $1.5M); and Ontario&rsquo;s provincial rebate (75% of the 8% portion, capped at '
+        + '$24,000). Only Ontario&rsquo;s provincial rebate is modelled &mdash; BC/AB/SK/MB are '
+        + 'GST-only (so the 5% layer is exact), while Qu&eacute;bec (QST) and the Atlantic HST '
+        + 'provinces model only the federal 5% (their provincial rebates are out of scope).</p>'
 
         + '<h2>Where the numbers come from</h2>'
         + '<p>Regional assumptions are matched to your postal code: researched values for '
@@ -2083,6 +2111,7 @@ def _render_result_html(sc: dict, inputs: dict, *, user: dict | None = None,
         "age": inputs.get("age", 35), "income": inputs.get("income", 120000.0),
         "strategy": inputs.get("strategy", "shelter-first"),
         "first_time": "true" if inputs.get("first_time") else "false",
+        "new_build": "true" if inputs.get("new_build") else "false",
     })
 
     # Save panel (signed-in) + share panel (DB on) — both hidden on read-only pages.
@@ -2152,12 +2181,15 @@ def _render_result_html(sc: dict, inputs: dict, *, user: dict | None = None,
 
 def _inputs_from_args(price, down, years, postal, age, income, strategy, first_time,
                       rate, appreciation, rent, rent_growth, property_tax_rate,
-                      investment_return, insurance, hoa, retirement_rate) -> dict:
+                      investment_return, insurance, hoa, retirement_rate,
+                      new_build=False) -> dict:
     """Collapse evaluate's args into a compact inputs dict (drop defaults)."""
     inputs: dict = {
         "price": price, "down": down, "years": years, "postal": postal,
         "age": age, "income": income, "strategy": strategy, "first_time": first_time,
     }
+    if new_build:
+        inputs["new_build"] = True
     for k, v in (("rate", rate), ("appreciation", appreciation), ("rent", rent),
                  ("rent_growth", rent_growth), ("property_tax_rate", property_tax_rate),
                  ("investment_return", investment_return), ("retirement_rate", retirement_rate)):
@@ -2182,6 +2214,7 @@ def evaluate(
     income: float = 120000.0,
     strategy: str = "shelter-first",
     first_time: bool = False,
+    new_build: bool = False,        # new construction: GST/HST applies to the price
     # Optional power-user overrides (default to regional data when omitted).
     rate: float | None = None,
     appreciation: float | None = None,
@@ -2203,6 +2236,7 @@ def evaluate(
         sc = _run_scenario(
             price=price, down=down, years=years, postal=postal,
             age=age, income=income, strategy=strategy, first_time=first_time,
+            new_build=new_build,
             rate=rate, appreciation=appreciation, rent=rent, rent_growth=rent_growth,
             property_tax_rate=property_tax_rate, investment_return=investment_return,
             insurance=insurance, hoa=hoa, retirement_rate=retirement_rate,
@@ -2214,7 +2248,7 @@ def evaluate(
     inputs = _inputs_from_args(price, down, years, postal, age, income, strategy,
                                first_time, rate, appreciation, rent, rent_growth,
                                property_tax_rate, investment_return, insurance, hoa,
-                               retirement_rate)
+                               retirement_rate, new_build)
     user = _current_user(request)
     if user:  # auto-save to run history (deduped + pruned)
         try:
@@ -2244,6 +2278,7 @@ def recompute(
     income: float = 120000.0,
     strategy: str = "shelter-first",
     first_time: bool = False,
+    new_build: bool = False,
     rate: float | None = None,
     appreciation: float | None = None,
     rent: float | None = None,
@@ -2263,6 +2298,7 @@ def recompute(
         sc = _run_scenario(
             price=price, down=down, years=years, postal=postal,
             age=age, income=income, strategy=strategy, first_time=first_time,
+            new_build=new_build,
             rate=rate, appreciation=appreciation, rent=rent,
             investment_return=investment_return, show_real=real, inflation=inflation,
             renewals=renewals, renewal_rate=renewal_rate,
@@ -2296,6 +2332,7 @@ def api_montecarlo(
     income: float = 120000.0,
     strategy: str = "shelter-first",
     first_time: bool = False,
+    new_build: bool = False,
     rate: float | None = None,
     appreciation: float | None = None,
     rent: float | None = None,
@@ -2320,7 +2357,8 @@ def api_montecarlo(
         args = argparse.Namespace(
             price=price, down=down, years=years, postal=postal,
             age=age, income=income, account_strategy=strategy, retirement_rate=None,
-            first_time_buyer=first_time, commission_rate=None, purchase_legal=None,
+            first_time_buyer=first_time, new_build=new_build,
+            commission_rate=None, purchase_legal=None,
             no_transaction_costs=False, live=_LIVE_DATA,
             rate=rate, appreciation=appreciation, rent=rent, rent_growth=None,
             property_tax_rate=None, investment_return=investment_return,
