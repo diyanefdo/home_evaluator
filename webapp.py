@@ -179,6 +179,8 @@ def _sanitize_inputs(raw: dict) -> dict:
         out["first_time"] = bool(raw["first_time"]) and str(raw["first_time"]).lower() not in _FALSY
     if "new_build" in raw:
         out["new_build"] = bool(raw["new_build"]) and str(raw["new_build"]).lower() not in _FALSY
+    if "on2026" in raw:
+        out["on2026"] = bool(raw["on2026"]) and str(raw["on2026"]).lower() not in _FALSY
     return out
 
 
@@ -194,6 +196,7 @@ def _run_from_inputs(inputs: dict) -> dict:
         strategy=str(inputs.get("strategy", "shelter-first")),
         first_time=bool(inputs.get("first_time", False)),
         new_build=bool(inputs.get("new_build", False)),
+        on2026=bool(inputs.get("on2026", False)),
         rate=inputs.get("rate"), appreciation=inputs.get("appreciation"),
         rent=inputs.get("rent"), rent_growth=inputs.get("rent_growth"),
         property_tax_rate=inputs.get("property_tax_rate"),
@@ -1081,6 +1084,14 @@ FORM = PAGE_HEAD + """
         </select>
         <small>New builds owe GST/HST on the price, net of the new-housing rebate.</small>
       </div>
+      <div class="field">
+        <label for="on2026">Ontario 2026 HST rebate?</label>
+        <select id="on2026" name="on2026">
+          <option value="false" selected>No</option>
+          <option value="true">Yes (Apr 2026 – Mar 2027)</option>
+        </select>
+        <small>Ontario only: temporary full-13% HST rebate on new builds ≤ $1M, all buyers.</small>
+      </div>
     </div>
     <button type="submit">Evaluate scenario</button>
   </form>
@@ -1192,7 +1203,7 @@ def _run_scenario(
     rate=None, appreciation=None, rent=None, rent_growth=None,
     property_tax_rate=None, investment_return=None, insurance=1500.0, hoa=0.0,
     retirement_rate=None, show_real=False, inflation=None,
-    renewals=False, renewal_rate=None, new_build=False,
+    renewals=False, renewal_rate=None, new_build=False, on2026=False,
 ) -> dict:
     """Validate inputs, run the full pipeline, build the chart data.
 
@@ -1223,7 +1234,7 @@ def _run_scenario(
     args = argparse.Namespace(
         price=price, down=down, years=years, postal=postal,
         age=age, income=income, account_strategy=strategy, retirement_rate=retirement_rate,
-        first_time_buyer=first_time, new_build=new_build,
+        first_time_buyer=first_time, new_build=new_build, ontario_2026=on2026,
         commission_rate=None, purchase_legal=None,
         no_transaction_costs=False, live=_LIVE_DATA,
         rate=rate, appreciation=appreciation, rent=rent, rent_growth=rent_growth,
@@ -1275,6 +1286,7 @@ def _run_scenario(
         "renewals": bool(summary.get("renewals_enabled")),
         "renewal_rate": summary.get("renewal_rate"),
         "new_build": bool(new_build),
+        "on2026": bool(on2026),
     }
 
 
@@ -1285,9 +1297,14 @@ def _buy_costs_field(sym: str, summary: dict, params: dict) -> str:
     gst_hst = params.get("gst_hst") or {}
     gh = gst_hst.get("total", 0.0) if gst_hst.get("applies") else 0.0
     gh_note = ""
-    if gh:
-        ftg = ", first-time GST rebate" if gst_hst.get("first_time") else ""
-        gh_note = f' + {sym}{gh:,.0f} GST/HST <small>(new build{ftg})</small>'
+    if gst_hst.get("applies"):
+        if gst_hst.get("on2026"):
+            tag = ", Ontario 2026 rebate"
+        elif gst_hst.get("first_time"):
+            tag = ", first-time GST rebate"
+        else:
+            tag = ""
+        gh_note = f' + {sym}{gh:,.0f} GST/HST <small>(new build{tag})</small>'
     if cmhc.get("required"):
         pst = cmhc.get("pst", 0.0)
         note = (f'(land-transfer + legal + {sym}{pst:,.0f} CMHC PST; '
@@ -1472,6 +1489,12 @@ def _methodology_html() -> str:
         + '$24,000). Only Ontario&rsquo;s provincial rebate is modelled &mdash; BC/AB/SK/MB are '
         + 'GST-only (so the 5% layer is exact), while Qu&eacute;bec (QST) and the Atlantic HST '
         + 'provinces model only the federal 5% (their provincial rebates are out of scope).</p>'
+        + '<p><b>Ontario 2026 temporary rebate (opt-in).</b> For purchase agreements signed '
+        + 'between <b>April 1, 2026 and March 31, 2027</b>, Ontario rebates the <b>full 13% HST</b> '
+        + 'on a new build to <b>all</b> buyers (not just first-time): 100% up to $1M (so $0 tax), a '
+        + 'flat $130,000 from $1M&ndash;$1.5M, declining to $24,000 by $1.85M. Tick '
+        + '&ldquo;Ontario 2026 HST rebate&rdquo; on a new build to apply it (Ontario postal codes '
+        + 'only). It is off by default because it is a time-limited program.</p>'
 
         + '<h2>Where the numbers come from</h2>'
         + '<p>Regional assumptions are matched to your postal code: researched values for '
@@ -2112,6 +2135,7 @@ def _render_result_html(sc: dict, inputs: dict, *, user: dict | None = None,
         "strategy": inputs.get("strategy", "shelter-first"),
         "first_time": "true" if inputs.get("first_time") else "false",
         "new_build": "true" if inputs.get("new_build") else "false",
+        "on2026": "true" if inputs.get("on2026") else "false",
     })
 
     # Save panel (signed-in) + share panel (DB on) — both hidden on read-only pages.
@@ -2182,7 +2206,7 @@ def _render_result_html(sc: dict, inputs: dict, *, user: dict | None = None,
 def _inputs_from_args(price, down, years, postal, age, income, strategy, first_time,
                       rate, appreciation, rent, rent_growth, property_tax_rate,
                       investment_return, insurance, hoa, retirement_rate,
-                      new_build=False) -> dict:
+                      new_build=False, on2026=False) -> dict:
     """Collapse evaluate's args into a compact inputs dict (drop defaults)."""
     inputs: dict = {
         "price": price, "down": down, "years": years, "postal": postal,
@@ -2190,6 +2214,8 @@ def _inputs_from_args(price, down, years, postal, age, income, strategy, first_t
     }
     if new_build:
         inputs["new_build"] = True
+    if on2026:
+        inputs["on2026"] = True
     for k, v in (("rate", rate), ("appreciation", appreciation), ("rent", rent),
                  ("rent_growth", rent_growth), ("property_tax_rate", property_tax_rate),
                  ("investment_return", investment_return), ("retirement_rate", retirement_rate)):
@@ -2215,6 +2241,7 @@ def evaluate(
     strategy: str = "shelter-first",
     first_time: bool = False,
     new_build: bool = False,        # new construction: GST/HST applies to the price
+    on2026: bool = False,           # Ontario's temporary 2026 enhanced HST rebate
     # Optional power-user overrides (default to regional data when omitted).
     rate: float | None = None,
     appreciation: float | None = None,
@@ -2236,7 +2263,7 @@ def evaluate(
         sc = _run_scenario(
             price=price, down=down, years=years, postal=postal,
             age=age, income=income, strategy=strategy, first_time=first_time,
-            new_build=new_build,
+            new_build=new_build, on2026=on2026,
             rate=rate, appreciation=appreciation, rent=rent, rent_growth=rent_growth,
             property_tax_rate=property_tax_rate, investment_return=investment_return,
             insurance=insurance, hoa=hoa, retirement_rate=retirement_rate,
@@ -2248,7 +2275,7 @@ def evaluate(
     inputs = _inputs_from_args(price, down, years, postal, age, income, strategy,
                                first_time, rate, appreciation, rent, rent_growth,
                                property_tax_rate, investment_return, insurance, hoa,
-                               retirement_rate, new_build)
+                               retirement_rate, new_build, on2026)
     user = _current_user(request)
     if user:  # auto-save to run history (deduped + pruned)
         try:
@@ -2279,6 +2306,7 @@ def recompute(
     strategy: str = "shelter-first",
     first_time: bool = False,
     new_build: bool = False,
+    on2026: bool = False,
     rate: float | None = None,
     appreciation: float | None = None,
     rent: float | None = None,
@@ -2298,7 +2326,7 @@ def recompute(
         sc = _run_scenario(
             price=price, down=down, years=years, postal=postal,
             age=age, income=income, strategy=strategy, first_time=first_time,
-            new_build=new_build,
+            new_build=new_build, on2026=on2026,
             rate=rate, appreciation=appreciation, rent=rent,
             investment_return=investment_return, show_real=real, inflation=inflation,
             renewals=renewals, renewal_rate=renewal_rate,
@@ -2333,6 +2361,7 @@ def api_montecarlo(
     strategy: str = "shelter-first",
     first_time: bool = False,
     new_build: bool = False,
+    on2026: bool = False,
     rate: float | None = None,
     appreciation: float | None = None,
     rent: float | None = None,
@@ -2357,7 +2386,7 @@ def api_montecarlo(
         args = argparse.Namespace(
             price=price, down=down, years=years, postal=postal,
             age=age, income=income, account_strategy=strategy, retirement_rate=None,
-            first_time_buyer=first_time, new_build=new_build,
+            first_time_buyer=first_time, new_build=new_build, ontario_2026=on2026,
             commission_rate=None, purchase_legal=None,
             no_transaction_costs=False, live=_LIVE_DATA,
             rate=rate, appreciation=appreciation, rent=rent, rent_growth=None,

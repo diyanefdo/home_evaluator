@@ -154,6 +154,14 @@ provincial rebate is modelled precisely; BC/AB/SK/MB are GST-only (so the 5% lay
 is exact), while Québec (QST) and the Atlantic HST provinces currently model only
 the federal 5% (their provincial rebates are out of scope).
 
+**Ontario 2026 temporary HST rebate** (opt-in). For purchase agreements signed
+between **April 1, 2026 and March 31, 2027**, Ontario rebates the **full 13% HST**
+on a new build for **all** buyers (not just first-time): 100% up to $1M (→ $0 tax),
+a flat $130,000 from $1M–$1.5M, declining to $24,000 by $1.85M. Enable it with
+`--ontario-2026-rebate` (CLI) or the **"Ontario 2026 HST rebate?"** dropdown (web) on
+a new build; it applies to Ontario postal codes only and is **off by default**
+because it is a time-limited program.
+
 **Rent is estimated from your home's price**, not a flat regional average. Each
 region carries a benchmark price/rent pair; the comparable rent is scaled from it
 by your entered price using a sub-linear price-to-rent relationship

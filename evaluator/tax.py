@@ -252,14 +252,16 @@ def purchase_closing_costs(
     first_time: bool = False,
     legal_fee: float = PURCHASE_LEGAL_FEE,
     new_build: bool = False,
+    on2026: bool = False,
 ) -> float:
     """One-time cash cost of buying: land-transfer tax + legal/inspection fees.
 
     A ``new_build`` (bought from a builder) also owes GST/HST on the price, net of
-    the applicable new-housing rebate; resale homes are GST/HST-exempt.
+    the applicable new-housing rebate; resale homes are GST/HST-exempt. ``on2026``
+    opts into Ontario's temporary 2026 enhanced HST rebate (see gst_hst_new_housing).
     """
     ltt = land_transfer_tax(price, region, first_time)
-    gst_hst = gst_hst_new_housing(price, region, first_time, new_build)["total"]
+    gst_hst = gst_hst_new_housing(price, region, first_time, new_build, on2026)["total"]
     return ltt + gst_hst + float(legal_fee)
 
 
@@ -322,27 +324,62 @@ def _provincial_hst_net(price: float, region: str) -> float:
     return max(0.0, prov - rebate)
 
 
+# Ontario's TEMPORARY enhanced HST rebate (2026): for purchase agreements signed
+# between Apr 1, 2026 and Mar 31, 2027, on a new home, available to ALL buyers (not
+# just first-time). It rebates the full 13% HST up to $1M (max $130k), stays flat at
+# $130k to $1.5M, declines linearly to $24k between $1.5M and $1.85M, then reverts to
+# the existing $24k provincial cap. Opt-in (a dated, time-limited program).
+_ON2026_FULL_MAX = 1_000_000.0     # full 13% rebated up to here (max $130k)
+_ON2026_FLAT_MAX = 1_500_000.0     # flat $130k up to here
+_ON2026_DECLINE_MAX = 1_850_000.0  # declines $130k -> $24k over $1.5M..$1.85M
+_ON2026_MAX_REBATE = 130_000.0
+_HST_FULL_RATE = 0.13              # combined federal (5%) + Ontario provincial (8%)
+
+
+def _ontario_2026_rebate(price: float) -> float:
+    """Ontario 2026 temporary rebate amount against the full 13% HST (see above)."""
+    if price <= _ON2026_FULL_MAX:
+        return _HST_FULL_RATE * price          # full 13% -> net $0
+    if price <= _ON2026_FLAT_MAX:
+        return _ON2026_MAX_REBATE
+    if price <= _ON2026_DECLINE_MAX:
+        frac = (price - _ON2026_FLAT_MAX) / (_ON2026_DECLINE_MAX - _ON2026_FLAT_MAX)
+        return _ON2026_MAX_REBATE - frac * (_ON2026_MAX_REBATE - _ON_PROV_REBATE_MAX)
+    return _ON_PROV_REBATE_MAX
+
+
 def gst_hst_new_housing(
     price: float,
     region: str = "ontario",
     first_time: bool = False,
     new_build: bool = False,
+    on2026: bool = False,
 ) -> dict:
     """Net GST/HST payable on a NEW-construction home after new-housing rebates.
 
     Resale homes are exempt (``applies`` False, totals 0). New builds owe 5% federal
     GST everywhere (net of the federal rebate, or the 2025 first-time-buyer GST
     rebate when larger), plus the provincial HST portion where modelled (Ontario).
+
+    ``on2026`` opts into Ontario's temporary 2026 enhanced HST rebate (agreements
+    Apr 1, 2026 - Mar 31, 2027): for Ontario new builds it rebates the full 13% HST
+    on the tiered schedule (full up to $1M, flat $130k to $1.5M, declining to $24k by
+    $1.85M) for ALL buyers. Outside Ontario the flag has no effect.
+
     Returns a breakdown: ``gst_net`` (federal), ``prov_net`` (provincial), ``total``.
     """
     if not new_build:
         return {"applies": False, "gst_net": 0.0, "prov_net": 0.0, "total": 0.0,
-                "first_time": bool(first_time)}
+                "first_time": bool(first_time), "on2026": False}
     price = float(price)
+    if on2026 and region in _ON_HST_REGIONS:
+        net = max(0.0, _HST_FULL_RATE * price - _ontario_2026_rebate(price))
+        return {"applies": True, "gst_net": 0.0, "prov_net": 0.0, "total": net,
+                "first_time": bool(first_time), "on2026": True}
     gst_net = _federal_gst_net(price, first_time)
     prov_net = _provincial_hst_net(price, region)
     return {"applies": True, "gst_net": gst_net, "prov_net": prov_net,
-            "total": gst_net + prov_net, "first_time": bool(first_time)}
+            "total": gst_net + prov_net, "first_time": bool(first_time), "on2026": False}
 
 
 # --------------------------------------------------------------------------- #

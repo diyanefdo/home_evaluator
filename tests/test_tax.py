@@ -209,3 +209,42 @@ class TestGstHstNewHousing:
         resale = tax.purchase_closing_costs(1_000_000, "toronto", False, new_build=False)
         newb = tax.purchase_closing_costs(1_000_000, "toronto", False, new_build=True)
         assert newb - resale == pytest.approx(106_000.0)
+
+
+class TestOntario2026Rebate:
+    def test_full_13_percent_waived_under_1m_for_all_buyers(self):
+        # Not first-time, $1M new build, ON 2026 window -> full 13% HST rebated -> $0.
+        d = tax.gst_hst_new_housing(1_000_000, "toronto", first_time=False,
+                                    new_build=True, on2026=True)
+        assert d["on2026"] is True
+        assert d["total"] == pytest.approx(0.0)
+
+    def test_flat_130k_rebate_between_1m_and_1_5m(self):
+        # $1.25M: 13% HST = $162,500, flat $130k rebate -> $32,500 net.
+        d = tax.gst_hst_new_housing(1_250_000, "ontario", first_time=False,
+                                    new_build=True, on2026=True)
+        assert d["total"] == pytest.approx(0.13 * 1_250_000 - 130_000)
+
+    def test_declines_to_24k_by_1_85m(self):
+        d = tax.gst_hst_new_housing(1_850_000, "toronto", first_time=False,
+                                    new_build=True, on2026=True)
+        assert d["total"] == pytest.approx(0.13 * 1_850_000 - 24_000)
+
+    def test_only_applies_in_ontario(self):
+        # A GST-only province ignores the Ontario program (falls back to federal).
+        d = tax.gst_hst_new_housing(1_000_000, "bc", first_time=False,
+                                    new_build=True, on2026=True)
+        assert d["on2026"] is False
+        assert d["total"] == pytest.approx(50_000.0)
+
+    def test_no_effect_on_resale(self):
+        d = tax.gst_hst_new_housing(1_000_000, "toronto", first_time=True,
+                                    new_build=False, on2026=True)
+        assert d["applies"] is False
+        assert d["total"] == 0.0
+
+    def test_more_generous_than_permanent_rules(self):
+        permanent = tax.gst_hst_new_housing(1_000_000, "toronto", first_time=True, new_build=True)
+        window = tax.gst_hst_new_housing(1_000_000, "toronto", first_time=True,
+                                         new_build=True, on2026=True)
+        assert window["total"] <= permanent["total"]

@@ -86,17 +86,19 @@ def build_engine_params(args: argparse.Namespace) -> dict:
     ltt_region = region.get("ltt_region", "ontario")
     first_time = bool(getattr(args, "first_time_buyer", False))
     new_build = bool(getattr(args, "new_build", False))
+    on2026 = bool(getattr(args, "ontario_2026", False))
     purchase_legal = _override(getattr(args, "purchase_legal", None), tax.PURCHASE_LEGAL_FEE)
     params["include_transaction_costs"] = include_tx
     params["ltt_region"] = ltt_region
     params["first_time_buyer"] = first_time
     params["new_build"] = new_build
+    params["ontario_2026_rebate"] = on2026
     base_closing = (
-        tax.purchase_closing_costs(price, ltt_region, first_time, purchase_legal, new_build)
+        tax.purchase_closing_costs(price, ltt_region, first_time, purchase_legal, new_build, on2026)
         if include_tx else 0.0
     )
     params["gst_hst"] = (
-        tax.gst_hst_new_housing(price, ltt_region, first_time, new_build)
+        tax.gst_hst_new_housing(price, ltt_region, first_time, new_build, on2026)
         if include_tx else {"applies": False, "total": 0.0}
     )
     params["commission_rate"] = _override(getattr(args, "commission_rate", None), tax.REALTOR_COMMISSION_RATE)
@@ -197,9 +199,14 @@ def print_report(params: dict, summary: dict, chart_paths: list[str]) -> None:
         print(f"    At purchase       : {_money(pc - pst - gh, sym)} land-transfer tax + legal "
               f"({params.get('ltt_region', 'ontario')}){ft}")
         if gst_hst.get("applies"):
-            ftg = "; first-time-buyer GST rebate" if params.get("first_time_buyer") else ""
+            if gst_hst.get("on2026"):
+                note = "; Ontario 2026 enhanced rebate (Apr 2026-Mar 2027)"
+            elif params.get("first_time_buyer"):
+                note = "; first-time-buyer GST rebate"
+            else:
+                note = ""
             print(f"    GST/HST (new build): {_money(gh, sym)} on the price, "
-                  f"net of the new-housing rebate{ftg}")
+                  f"net of the new-housing rebate{note}")
         print(f"    At sale (yr {T})    : {_money(sc, sym)} "
               f"(~{params.get('commission_rate', 0.05) * 100:.0f}% commission + HST + legal)")
         if cmhc.get("required"):
@@ -339,6 +346,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     x.add_argument("--new-build", action="store_true",
                    help="Home is new construction from a builder: adds GST/HST on the "
                         "price, net of the new-housing rebate (resale homes are exempt)")
+    x.add_argument("--ontario-2026-rebate", dest="ontario_2026", action="store_true",
+                   help="Apply Ontario's temporary 2026 enhanced HST rebate (agreements "
+                        "Apr 1 2026-Mar 31 2027, all buyers): full 13%% HST back on a new "
+                        "build up to $1M, tiered to $1.85M. Ontario only; needs --new-build.")
     x.add_argument("--commission-rate", type=float,
                    help="Realtor commission at sale (decimal, default 0.05)")
     x.add_argument("--purchase-legal", type=float,
