@@ -22,7 +22,7 @@ import os
 import secrets
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 
@@ -40,7 +40,71 @@ except Exception:  # noqa: BLE001 - any import problem just disables accounts
 
 from pydantic import BaseModel
 
+
+def _normalize_base_path(value: str) -> str:
+    """Return a URL mount path such as ``/home_evaluator`` (or ``""``)."""
+    value = (value or "").strip()
+    if not value or value == "/":
+        return ""
+    if "?" in value or "#" in value:
+        raise ValueError("EVALUATOR_BASE_PATH must be a URL path, without ? or #")
+    return "/" + value.strip("/")
+
+
+# Public mount point. Routes remain written relative to the FastAPI app, while
+# generated browser URLs are prefixed and the middleware below accepts requests
+# with the prefix still attached (as Cloudflare Tunnel and most edge proxies do).
+_BASE_PATH = _normalize_base_path(os.environ.get("EVALUATOR_BASE_PATH", ""))
+
+
+def _app_url(path: str = "/") -> str:
+    """Build an absolute, browser-facing URL for an app-local path."""
+    path = "/" + (path or "").lstrip("/")
+    return f"{_BASE_PATH}{path}" if _BASE_PATH else path
+
+
+def _prefix_app_urls(markup: str) -> str:
+    """Prefix root-relative URLs embedded in our HTML, CSS, and JavaScript."""
+    if not _BASE_PATH:
+        return markup
+    replacements = (
+        ('href="/', f'href="{_BASE_PATH}/'),
+        ("href='/", f"href='{_BASE_PATH}/"),
+        ('src="/', f'src="{_BASE_PATH}/'),
+        ("src='/", f"src='{_BASE_PATH}/"),
+        ('action="/', f'action="{_BASE_PATH}/'),
+        ("action='/", f"action='{_BASE_PATH}/"),
+        ('data-base="/', f'data-base="{_BASE_PATH}/'),
+        ("data-base='/", f"data-base='{_BASE_PATH}/"),
+        ("fetch('/", f"fetch('{_BASE_PATH}/"),
+        ('fetch("/', f'fetch("{_BASE_PATH}/'),
+        ('location.href="/', f'location.href="{_BASE_PATH}/'),
+        ("location.href='/", f"location.href='{_BASE_PATH}/"),
+        ("url('/", f"url('{_BASE_PATH}/"),
+        ('url("/', f'url("{_BASE_PATH}/'),
+    )
+    for original, prefixed in replacements:
+        markup = markup.replace(original, prefixed)
+    return markup
+
+
 app = FastAPI(title="Canadian Buy-vs-Rent Home Evaluator")
+
+
+@app.middleware("http")
+async def _accept_configured_base_path(request: Request, call_next):
+    """Strip the configured public prefix before FastAPI route matching.
+
+    Unprefixed routes intentionally keep working for local diagnostics and the
+    container health check. Browser-facing links always use ``_BASE_PATH``.
+    """
+    if _BASE_PATH:
+        path = request.scope.get("path", "")
+        if path == _BASE_PATH or path.startswith(_BASE_PATH + "/"):
+            stripped = path[len(_BASE_PATH):] or "/"
+            request.scope["path"] = stripped
+            request.scope["raw_path"] = stripped.encode("utf-8")
+    return await call_next(request)
 
 # Vendored Plotly (no external CDN) for the interactive charts. Served open so the
 # library loads regardless of basic-auth on the pages.
@@ -152,7 +216,8 @@ def _auth_bar(user: dict | None) -> str:
 
 def _page(page_html: str, user: dict | None) -> str:
     """Inject the auth widget just inside <body> for a rendered page."""
-    return page_html.replace("<body>", "<body>" + _auth_bar(user), 1)
+    rendered = page_html.replace("<body>", "<body>" + _auth_bar(user), 1)
+    return _prefix_app_urls(rendered)
 
 
 # Inputs we accept for a saved scenario (everything /evaluate understands).
@@ -1144,7 +1209,7 @@ def _error_page(message: str) -> HTMLResponse:
         + '<p><a class="back" href="/">&larr; Back to the form</a></p>'
         + PAGE_FOOT
     )
-    return HTMLResponse(body, status_code=400)
+    return HTMLResponse(_prefix_app_urls(body), status_code=400)
 
 
 def _chart_data(projection: dict, params: dict) -> dict:
@@ -1644,12 +1709,27 @@ def admin_dashboard(request: Request):
 # --------------------------------------------------------------------------- #
 # Google OAuth sign-in (only registered when accounts are enabled).
 # --------------------------------------------------------------------------- #
+def _safe_return_path(value: str | None) -> str | None:
+    """Accept a short same-origin absolute path, never a URL or protocol-relative path."""
+    value = (value or "").strip()
+    if (not value or len(value) > 256 or not value.startswith("/")
+            or value.startswith("//") or "\\" in value or "\r" in value or "\n" in value):
+        return None
+    return value
+
+
 @app.get("/login")
 async def login(request: Request):
     if not _OAUTH_ON:
         raise HTTPException(status_code=404, detail="Accounts are not enabled.")
+    return_to = _safe_return_path(request.query_params.get("next"))
+    if return_to:
+        request.session["oauth_return_to"] = return_to
+    else:
+        request.session.pop("oauth_return_to", None)
     redirect_uri = (os.environ.get("EVALUATOR_OAUTH_REDIRECT", "").strip()
-                    or str(request.url_for("auth_google")))
+                    or str(request.base_url).rstrip("/")
+                    + _app_url("/auth/google/callback"))
     return await _oauth.google.authorize_redirect(request, redirect_uri)
 
 
@@ -1660,24 +1740,55 @@ async def auth_google(request: Request):
     try:
         token = await _oauth.google.authorize_access_token(request)
     except OAuthError:
-        return RedirectResponse(url="/?login=failed")
+        request.session.pop("oauth_return_to", None)
+        return RedirectResponse(url=_app_url("/?login=failed"))
     info = token.get("userinfo") or {}
     sub = info.get("sub")
     if not sub:
-        return RedirectResponse(url="/?login=failed")
+        request.session.pop("oauth_return_to", None)
+        return RedirectResponse(url=_app_url("/?login=failed"))
     user = accounts.upsert_google_user(
         google_sub=sub, email=info.get("email", ""),
         name=info.get("name"), picture=info.get("picture"),
     )
     request.session["user_id"] = user["id"]
-    return RedirectResponse(url="/")
+    return RedirectResponse(url=request.session.pop("oauth_return_to", None) or _app_url("/"))
+
+
+@app.get("/auth/budget-check")
+def budget_auth_check(request: Request):
+    """Private nginx auth subrequest for the Budgeting Beaver route."""
+    if not _OAUTH_ON:
+        return Response(status_code=403)
+    user = _current_user(request)
+    if not user:
+        return Response(status_code=401)
+    email = (user.get("email") or "").strip().lower()
+    user_id = user.get("id")
+    if (
+        not email
+        or len(email) > 254
+        or email.count("@") != 1
+        or any(character.isspace() for character in email)
+        or not isinstance(user_id, int)
+        or user_id < 1
+    ):
+        return Response(status_code=403)
+    headers = {
+        "X-Authenticated-Email": email,
+        "X-Authenticated-User-ID": str(user_id),
+    }
+    if _is_admin(user):
+        headers["X-Budget-Owner"] = "1"
+    return Response(status_code=204, headers=headers)
 
 
 @app.get("/logout")
 def logout(request: Request):
+    return_to = _safe_return_path(request.query_params.get("next"))
     if _ACCOUNTS_IMPORTABLE:
         request.session.clear()
-    return RedirectResponse(url="/")
+    return RedirectResponse(url=return_to or _app_url("/"))
 
 
 # --------------------------------------------------------------------------- #
@@ -1800,7 +1911,7 @@ def scenario_open(scenario_id: int, request: Request):
     row = scenarios.get(scenario_id, user["id"])
     if row is None:
         raise HTTPException(status_code=404, detail="Scenario not found.")
-    return RedirectResponse(url="/evaluate?" + _scenario_query(row["inputs"], scenario_id))
+    return RedirectResponse(url=_app_url("/evaluate?") + _scenario_query(row["inputs"], scenario_id))
 
 
 @app.post("/scenarios/{scenario_id}/rename")
@@ -1809,14 +1920,14 @@ def scenario_rename(scenario_id: int, request: Request, name: str = ""):
     new_name = (name or "").strip()[:120]
     if new_name:
         scenarios.update(scenario_id, user["id"], name=new_name)
-    return RedirectResponse(url="/scenarios", status_code=303)
+    return RedirectResponse(url=_app_url("/scenarios"), status_code=303)
 
 
 @app.post("/scenarios/{scenario_id}/delete")
 def scenario_delete(scenario_id: int, request: Request):
     user = _require_login(request)
     scenarios.delete(scenario_id, user["id"])
-    return RedirectResponse(url="/scenarios", status_code=303)
+    return RedirectResponse(url=_app_url("/scenarios"), status_code=303)
 
 
 # --------------------------------------------------------------------------- #
@@ -1958,7 +2069,7 @@ def create_share(payload: ShareIn, request: Request):
     except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(status_code=400, detail=f"Could not create link: {exc}")
     row = shares.create(inputs, _snapshot(sc))
-    return {"ok": True, "slug": row["slug"], "url": f"/r/{row['slug']}"}
+    return {"ok": True, "slug": row["slug"], "url": _app_url(f"/r/{row['slug']}")}
 
 
 @app.get("/r/{slug}", response_class=HTMLResponse)

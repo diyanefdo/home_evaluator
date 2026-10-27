@@ -207,6 +207,28 @@ Endpoints: `/` (form), `/evaluate?price=1000000&down=200000&years=30&postal=M2J+
 Cloudflare Tunnel, or ngrok) — including WSL2 notes — see
 [`knowledge/DOCKER_PRIVATE_DEPLOYMENT.md`](knowledge/DOCKER_PRIVATE_DEPLOYMENT.md).
 
+### Hosting below a URL path
+
+Set `EVALUATOR_BASE_PATH` when the public URL includes a path prefix:
+
+```bash
+EVALUATOR_BASE_PATH=/home_evaluator
+```
+
+The app then generates links and accepts requests below `/home_evaluator` while
+leaving the unprefixed `/healthz` endpoint available for container health checks.
+For Google sign-in, register and configure the full callback URL, including the
+prefix—for example:
+`https://choconut.ca/home_evaluator/auth/google/callback`.
+
+DNS only selects the host (`choconut.ca`), not a path. The public host, reverse
+proxy, or tunnel must therefore forward `/home_evaluator/*` to this service on
+port 8000. For this project's PC-hosted custom-domain setup, follow
+[`knowledge/CHOCONUT_DOMAIN_SETUP.md`](knowledge/CHOCONUT_DOMAIN_SETUP.md). To
+repeat the same deployment pattern for another project, use the reusable
+[`knowledge/SELF_HOST_WITH_CLOUDFLARE_TUNNEL.md`](knowledge/SELF_HOST_WITH_CLOUDFLARE_TUNNEL.md)
+guide.
+
 ### Accounts (Postgres + Google sign-in)
 
 `docker compose` also starts a **PostgreSQL** container (separate service `db`,
@@ -231,6 +253,13 @@ troubleshooting):** [`knowledge/GOOGLE_OAUTH_SETUP.md`](knowledge/GOOGLE_OAUTH_S
 
 New endpoints when enabled: `/login`, `/auth/google/callback`, `/logout`. Without
 the deps or env, the app degrades gracefully to the stateless tool.
+
+In the Choconut stack, this same signed Google session also protects
+`/budgeting_beaver/`. nginx performs a private auth check against Home Evaluator
+and forwards the authenticated stable user ID plus email identity to the
+budgeting container. Every valid Google user receives an isolated Budgeting
+Beaver workspace automatically; `EVALUATOR_ADMIN_EMAILS` only identifies the
+legacy-data owner. No additional Google callback URI is needed.
 
 **Saved scenarios:** signed-in users get a **Save scenario** panel on the results
 page (it captures the current what-if slider state) and a **My scenarios** page

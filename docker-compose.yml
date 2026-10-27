@@ -1,10 +1,10 @@
 services:
-  home-evaluator:
+  home-evaluator-app:
     build: .
     image: home-evaluator
-    container_name: home-evaluator
-    ports:
-      - "8000:8000"          # host:container — see WSL note in knowledge/DOCKER_PRIVATE_DEPLOYMENT.md
+    container_name: home-evaluator-app
+    expose:
+      - "8000"
     environment:
       # Set these in a local .env file (gitignored) to require login on a public link.
       # EVALUATOR_AUTH toggles login: on/off, or leave empty for "auto"
@@ -12,6 +12,9 @@ services:
       - EVALUATOR_AUTH=${EVALUATOR_AUTH:-}
       - EVALUATOR_USER=${EVALUATOR_USER:-admin}
       - EVALUATOR_PASSWORD=${EVALUATOR_PASSWORD:-}
+      # Public URL prefix. The app remains reachable at /healthz locally for
+      # Docker's health check, while browser links use this mounted path.
+      - EVALUATOR_BASE_PATH=${EVALUATOR_BASE_PATH:-/home_evaluator}
       # Live 5yr mortgage rate from the Bank of Canada (on by default; falls back
       # to baked-in regional rates if offline). Set to "off" to disable.
       - EVALUATOR_LIVE_DATA=${EVALUATOR_LIVE_DATA:-on}
@@ -24,6 +27,8 @@ services:
       - EVALUATOR_SECRET_KEY=${EVALUATOR_SECRET_KEY:-}
       - EVALUATOR_OAUTH_REDIRECT=${EVALUATOR_OAUTH_REDIRECT:-}
       - EVALUATOR_ADMIN_EMAILS=${EVALUATOR_ADMIN_EMAILS:-}
+      # Budgeting Beaver reuses this Google session. Every authenticated Google
+      # user receives an isolated workspace; admin emails remain legacy owners.
     depends_on:
       db:
         condition: service_healthy
@@ -33,6 +38,61 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  budgetting-beaver-app:
+    build:
+      context: ../Budgetting-Beaver
+    image: budgetting-beaver
+    container_name: budgetting-beaver-app
+    expose:
+      - "8080"
+    environment:
+      - BUDGET_BASE_PATH=/budgeting_beaver
+      - BUDGET_PUBLIC_ORIGIN=https://choconut.ca
+      - BUDGET_PORT=8080
+      - BUDGET_STATE_ROOT=/data
+      # nginx validates the existing Home Evaluator Google session before
+      # forwarding a request and replaces the identity header itself.
+      - BUDGET_AUTH_MODE=proxy
+    command: ["node", "--use-env-proxy", "--env-file-if-exists=/run/secrets/budgetting-beaver.env", "web/server.mjs"]
+    volumes:
+      - ../Budgetting-Beaver/.bank-check:/data/.bank-check
+      # Plaid credentials stay in the ignored source env file and are read only
+      # by the authenticated backend; they are never copied into the image.
+      - ../Budgetting-Beaver/.env:/run/secrets/budgetting-beaver.env:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r => { if (!r.ok) process.exit(1) })"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # Stable origin for Cloudflare and Tailscale. The existing root application
+  # serves the Choconut homepage, while path-specific routes proxy the apps.
+  home-evaluator:
+    image: nginx:1.27-alpine
+    container_name: choconut-gateway
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./deploy/choconut-gateway.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../choconut/homepage/dist:/srv/choconut-home:ro
+    depends_on:
+      home-evaluator-app:
+        condition: service_healthy
+      budgetting-beaver-app:
+        condition: service_healthy
+    networks:
+      - default
+      - choconut-ingress
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8000/gateway-healthz >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
   db:
     image: postgres:16
@@ -50,5 +110,23 @@ services:
       timeout: 5s
       retries: 5
 
+  # Optional public ingress for choconut.ca. Create a remotely managed
+  # Cloudflare Tunnel, put its token in .env, then start the cloudflare profile.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: home-evaluator-tunnel
+    command: tunnel --no-autoupdate --protocol http2 run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      home-evaluator:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles: ["cloudflare"]
+
 volumes:
   evaluator-pgdata:
+
+networks:
+  choconut-ingress:
+    external: true
